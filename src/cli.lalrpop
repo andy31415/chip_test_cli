@@ -1,0 +1,13 @@
+use std::str::FromStr;
+use std::time::Duration;
+use crate::ast::{Command as AstCommand};
+
+grammar;
+
+pub Command: AstCommand = {
+    "list" => AstCommand::List,
+    "scan" <n:Num> => AstCommand::Scan(Duration::from_secs(n)),
+    "exit" => AstCommand::Exit,
+}
+
+Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();

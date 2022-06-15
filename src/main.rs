@@ -9,7 +9,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::platform::{Manager, Adapter};
+use btleplug::platform::{Adapter, Manager};
 use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input};
 use tokio::time;
 
@@ -137,7 +137,7 @@ impl Completion for Commands {
     }
 }
 
-async fn scan(adapter: &Adapter) -> Result<()> {
+async fn scan(adapter: &Adapter, duration: Duration) -> Result<()> {
     let scan_filter = ScanFilter::default();
 
     println!("Starting scan ... ");
@@ -146,7 +146,7 @@ async fn scan(adapter: &Adapter) -> Result<()> {
         .await
         .expect("Can't scan BLE adapter for connected devices.");
 
-    time::sleep(Duration::from_secs(2)).await;
+    time::sleep(duration).await;
     adapter.stop_scan().await?;
 
     println!("Starting done");
@@ -185,7 +185,7 @@ async fn list(adapter: &Adapter) -> Result<()> {
                     eprintln!("Invalid matter data: {}", data.err().unwrap());
                     continue;
                 }
-                
+
                 data.unwrap()
             }
         };
@@ -221,22 +221,20 @@ async fn main() -> Result<()> {
             .interact_text()?;
 
         info!("User input: {:?}", command);
-        let command = cli::CommandParser::new().parse(&command); 
+        let command = cli::CommandParser::new().parse(&command);
         info!("Parsed: {:?}", command);
-        
+
         let result = match command {
             Ok(Command::List) => list(&adapter).await,
-            Ok(Command::Scan) => scan(&adapter).await,
+            Ok(Command::Scan(duration)) => scan(&adapter, duration).await,
             Ok(Command::Exit) => break,
             Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
-        
-        
+
         if result.is_err() {
             println!("ERR: {:?}", result);
         }
     }
-
 
     Ok(())
 }
