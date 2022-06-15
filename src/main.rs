@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -28,6 +29,12 @@ impl Debug for VendorId {
     }
 }
 
+bitflags! {
+    struct CommissionableDataFlags: u8 {
+        const ADDITIONAL_DATA = 0x01;
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 struct Discriminator(u16); // 12 bit max
 
@@ -36,6 +43,7 @@ struct MatterBleCommissionableData {
     discriminator: Discriminator,
     vendor_id: Option<VendorId>,
     product_id: Option<ProductId>,
+    flags: CommissionableDataFlags,
 }
 
 fn parse_advertising_data(data: &[u8]) -> Result<MatterBleCommissionableData> {
@@ -59,8 +67,17 @@ fn parse_advertising_data(data: &[u8]) -> Result<MatterBleCommissionableData> {
     let version_and_discriminator = LittleEndian::read_u16(&data[1..3]);
     let vendor_id = LittleEndian::read_u16(&data[3..5]);
     let product_id = LittleEndian::read_u16(&data[5..7]);
+    let flags = data[7];
 
     let version = (version_and_discriminator >> 12) & 0x0F;
+
+    if version != 0 {
+        return Err(anyhow!(
+            "Unsupported commissionable payload version: {}",
+            version
+        ));
+    }
+
     let discriminator = Discriminator(version_and_discriminator & 0x0FFF);
     let vendor_id = if vendor_id == 0 {
         None
@@ -73,27 +90,20 @@ fn parse_advertising_data(data: &[u8]) -> Result<MatterBleCommissionableData> {
         Some(ProductId(product_id))
     };
 
-    if version != 0 {
-        return Err(anyhow!(
-            "Unsupported commissionable payload version: {}",
-            version
-        ));
-    }
-
-    // TODO: additional data?
+    let flags = CommissionableDataFlags::from_bits(flags)
+        .ok_or(anyhow!("Unable to parse flags {:x}", flags))?;
 
     return Ok(MatterBleCommissionableData {
         discriminator,
         vendor_id,
         product_id,
+        flags: flags,
     });
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init();
-
-    info!("Hello, world!");
 
     let manager = Manager::new().await?;
     let adapter_list = manager.adapters().await?;
@@ -106,22 +116,24 @@ async fn main() -> Result<()> {
     let adapter = adapter_list.first().unwrap();
 
     let matter_uuid = uuid_from_u16(0xFFF6);
-    info!("UUID: {:?}", matter_uuid);
+    info!("MATTER UUID: {:?}", matter_uuid);
 
-    /*
     let scan_filter = ScanFilter::default();
 
+    println!("Starting scan ... ");
     adapter
         .start_scan(scan_filter)
         .await
         .expect("Can't scan BLE adapter for connected devices.");
 
     time::sleep(Duration::from_secs(2)).await;
-    adapter.stop_scan();
-   */
+    adapter.stop_scan().await?;
+
+    println!("Starting done");
+
     let peripherals = adapter.peripherals().await?;
 
-    info!("Found {} peripherals", peripherals.len());
+    println!("Found {} peripherals", peripherals.len());
 
     for peripheral in peripherals {
         let props = peripheral.properties().await;
@@ -146,7 +158,7 @@ async fn main() -> Result<()> {
                 let data = parse_advertising_data(data.as_slice());
 
                 if data.is_err() {
-                    warn!("Invalid matter data: {}", data.err().unwrap());
+                    eprintln!("Invalid matter data: {}", data.err().unwrap());
                     continue;
                 }
 
