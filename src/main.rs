@@ -8,7 +8,8 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::platform::Manager;
+use btleplug::platform::{Manager, Adapter};
+use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input};
 use tokio::time;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
@@ -16,6 +17,8 @@ struct VendorId(u16);
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct ProductId(u16);
+
+const MATTER_UUID: uuid::Uuid = uuid_from_u16(0xFFF6);
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -101,23 +104,34 @@ fn parse_advertising_data(data: &[u8]) -> Result<MatterBleCommissionableData> {
     });
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    pretty_env_logger::init();
-
-    let manager = Manager::new().await?;
-    let adapter_list = manager.adapters().await?;
-
-    if adapter_list.is_empty() {
-        eprintln!("NO BLE adapters found!");
-        return Err(anyhow::anyhow!("NO ADAPTERS!"));
+struct Commands {
+    commands: Vec<String>,
+}
+impl Default for Commands {
+    fn default() -> Self {
+        Self {
+            commands: vec!["scan".to_string(), "list".to_string(), "exit".to_string()],
+        }
     }
+}
 
-    let adapter = adapter_list.first().unwrap();
+impl Completion for Commands {
+    fn get(&self, input: &str) -> Option<String> {
+        let matches = self
+            .commands
+            .iter()
+            .filter(|option| option.starts_with(input))
+            .collect::<Vec<_>>();
 
-    let matter_uuid = uuid_from_u16(0xFFF6);
-    info!("MATTER UUID: {:?}", matter_uuid);
+        if matches.len() == 1 {
+            Some(matches[0].to_string())
+        } else {
+            None
+        }
+    }
+}
 
+async fn scan(adapter: &Adapter) -> Result<()> {
     let scan_filter = ScanFilter::default();
 
     println!("Starting scan ... ");
@@ -131,6 +145,10 @@ async fn main() -> Result<()> {
 
     println!("Starting done");
 
+    Ok(())
+}
+
+async fn list(adapter: &Adapter) -> Result<()> {
     let peripherals = adapter.peripherals().await?;
 
     println!("Found {} peripherals", peripherals.len());
@@ -149,7 +167,7 @@ async fn main() -> Result<()> {
         }
         let props = props.unwrap();
 
-        let data = match props.service_data.get(&matter_uuid) {
+        let data = match props.service_data.get(&MATTER_UUID) {
             None => {
                 warn!("{:?} Does not look like a matter device.", props.address);
                 continue;
@@ -161,15 +179,56 @@ async fn main() -> Result<()> {
                     eprintln!("Invalid matter data: {}", data.err().unwrap());
                     continue;
                 }
-
+                
                 data.unwrap()
             }
         };
 
-        if !props.service_data.contains_key(&matter_uuid) {}
+        if !props.service_data.contains_key(&MATTER_UUID) {}
 
         println!("Peripheral {:?}: {:?}", props.address, data);
     }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    pretty_env_logger::init();
+
+    let manager = Manager::new().await?;
+    let adapter_list = manager.adapters().await?;
+
+    if adapter_list.is_empty() {
+        eprintln!("NO BLE adapters found!");
+        return Err(anyhow::anyhow!("NO ADAPTERS!"));
+    }
+
+    let adapter = adapter_list.first().unwrap();
+
+    info!("MATTER UUID: {:?}", MATTER_UUID);
+
+    loop {
+        let completion = Commands::default();
+        let command = Input::<String>::with_theme(&ColorfulTheme::default())
+            .with_prompt("Input (quit with 'exit') ")
+            .completion_with(&completion)
+            .interact_text()?;
+
+        let result = match command.as_str() {
+            "scan" => scan(&adapter).await,
+            "list" => list(&adapter).await,
+            "exit" => break,
+            _ => {
+                println!("UNKNOWN COMMAND: {:?}", command);
+                Ok(())
+            }
+        };
+        
+        if result.is_err() {
+            println!("COMMAND: {:?}", command);
+        }
+    }
+
 
     Ok(())
 }
