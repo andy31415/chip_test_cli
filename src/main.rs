@@ -1,3 +1,4 @@
+use ast::Command;
 use bitflags::bitflags;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -11,6 +12,11 @@ use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Manager, Adapter};
 use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input};
 use tokio::time;
+
+use lalrpop_util::lalrpop_mod;
+
+lalrpop_mod!(pub cli);
+mod ast;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct VendorId(u16);
@@ -110,7 +116,7 @@ struct Commands {
 impl Default for Commands {
     fn default() -> Self {
         Self {
-            commands: vec!["scan".to_string(), "list".to_string(), "exit".to_string()],
+            commands: Command::all_strings(),
         }
     }
 }
@@ -214,18 +220,20 @@ async fn main() -> Result<()> {
             .completion_with(&completion)
             .interact_text()?;
 
-        let result = match command.as_str() {
-            "scan" => scan(&adapter).await,
-            "list" => list(&adapter).await,
-            "exit" => break,
-            _ => {
-                println!("UNKNOWN COMMAND: {:?}", command);
-                Ok(())
-            }
+        info!("User input: {:?}", command);
+        let command = cli::CommandParser::new().parse(&command); 
+        info!("Parsed: {:?}", command);
+        
+        let result = match command {
+            Ok(Command::List) => list(&adapter).await,
+            Ok(Command::Scan) => scan(&adapter).await,
+            Ok(Command::Exit) => break,
+            Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
         
+        
         if result.is_err() {
-            println!("COMMAND: {:?}", command);
+            println!("ERR: {:?}", result);
         }
     }
 
