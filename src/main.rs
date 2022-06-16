@@ -9,7 +9,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::platform::{Adapter, Manager};
+use btleplug::platform::{Adapter, Manager, PeripheralId};
 use dialoguer::{theme::ColorfulTheme, Completion, Input};
 use tokio::time;
 
@@ -143,70 +143,89 @@ fn help() {
     println!("   scan <number_of_seconds> ");
 }
 
-async fn scan(adapter: &Adapter, duration: Duration) -> Result<()> {
-    let scan_filter = ScanFilter::default();
-
-    println!("Starting scan ... ");
-    adapter
-        .start_scan(scan_filter)
-        .await
-        .expect("Can't scan BLE adapter for connected devices.");
-
-    time::sleep(duration).await;
-    adapter.stop_scan().await?;
-
-    println!("Starting done");
-
-    Ok(())
+/// The execution shell, to be stateful
+struct Shell<'a> {
+    adapter: &'a Adapter,
+    available_peripherals: Vec<PeripheralId>,
 }
 
-async fn test(adapter: &Adapter) -> Result<()> {
-    // FIXME: implement
-    println!("NOT YET IMPLEMENTED!");
-    Ok(())
-}
-
-async fn list(adapter: &Adapter) -> Result<()> {
-    let peripherals = adapter.peripherals().await?;
-
-    println!("Found {} peripherals", peripherals.len());
-
-    for peripheral in peripherals {
-        let props = peripheral.properties().await;
-        if let Err(err) = props {
-            warn!("Cannot get properties of {:?}: {:?}", peripheral, err);
-            continue;
+impl<'a> Shell<'a> {
+    fn new(adapter: &'a Adapter) -> Self {
+        Self {
+            adapter,
+            available_peripherals: Vec::default(),
         }
-        let props = props.unwrap();
+    }
 
-        if props.is_none() {
-            warn!("  CANNOT get properties of peripheral");
-            continue;
-        }
-        let props = props.unwrap();
+    async fn list(&mut self) -> Result<()> {
+        let peripherals = self.adapter.peripherals().await?;
 
-        let data = match props.service_data.get(&MATTER_UUID) {
-            None => {
-                warn!("{:?} Does not look like a matter device.", props.address);
+        println!("Found {} peripherals", peripherals.len());
+
+        self.available_peripherals.clear();
+        for peripheral in peripherals {
+            let props = peripheral.properties().await;
+            if let Err(err) = props {
+                warn!("Cannot get properties of {:?}: {:?}", peripheral, err);
                 continue;
             }
-            Some(data) => {
-                let data = parse_advertising_data(data.as_slice());
+            let props = props.unwrap();
 
-                if data.is_err() {
-                    eprintln!("Invalid matter data: {}", data.err().unwrap());
+            if props.is_none() {
+                warn!("  CANNOT get properties of peripheral");
+                continue;
+            }
+            let props = props.unwrap();
+
+            let data = match props.service_data.get(&MATTER_UUID) {
+                None => {
+                    warn!("{:?} Does not look like a matter device.", props.address);
                     continue;
                 }
+                Some(data) => {
+                    let data = parse_advertising_data(data.as_slice());
 
-                data.unwrap()
-            }
-        };
+                    if data.is_err() {
+                        eprintln!("Invalid matter data: {}", data.err().unwrap());
+                        continue;
+                    }
 
-        if !props.service_data.contains_key(&MATTER_UUID) {}
+                    data.unwrap()
+                }
+            };
 
-        println!("Peripheral {:?}: {:?}", props.address, data);
+            if !props.service_data.contains_key(&MATTER_UUID) {}
+
+            println!("{} Peripheral {:?}:", self.available_peripherals.len(), peripheral.id());
+            println!("    {:?}", data);
+            
+            self.available_peripherals.push(peripheral.id());
+        }
+        Ok(())
     }
-    Ok(())
+
+    async fn scan(&self, duration: Duration) -> Result<()> {
+        let scan_filter = ScanFilter::default();
+
+        println!("Starting scan ... ");
+        self.adapter
+            .start_scan(scan_filter)
+            .await
+            .expect("Can't scan BLE adapter for connected devices.");
+
+        time::sleep(duration).await;
+        self.adapter.stop_scan().await?;
+
+        println!("Starting done");
+
+        Ok(())
+    }
+
+    async fn test(&self) -> Result<()> {
+        // FIXME: implement
+        println!("NOT YET IMPLEMENTED!");
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -225,6 +244,8 @@ async fn main() -> Result<()> {
 
     info!("MATTER UUID: {:?}", MATTER_UUID);
 
+    let mut shell = Shell::new(adapter);
+
     loop {
         let completion = Commands::default();
         let command = Input::<String>::with_theme(&ColorfulTheme::default())
@@ -237,14 +258,14 @@ async fn main() -> Result<()> {
         info!("Parsed: {:?}", command);
 
         let result = match command {
-            Ok(Command::List) => list(adapter).await,
-            Ok(Command::Scan(duration)) => scan(adapter, duration).await,
+            Ok(Command::List) => shell.list().await,
+            Ok(Command::Scan(duration)) => shell.scan(duration).await,
             Ok(Command::Help) => {
                 help();
                 Ok(())
-            },
+            }
             Ok(Command::Exit) => break,
-            Ok(Command::Test) => test(adapter).await,
+            Ok(Command::Test) => shell.test().await,
             Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
 
