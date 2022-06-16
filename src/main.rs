@@ -137,6 +137,12 @@ impl Completion for Commands {
     }
 }
 
+fn help() {
+    println!("Available commands: {}", Command::all_strings().join(", "));
+    println!("Some specific syntaxes: ");
+    println!("   scan <number_of_seconds> ");
+}
+
 async fn scan(adapter: &Adapter, duration: Duration) -> Result<()> {
     let scan_filter = ScanFilter::default();
 
@@ -227,12 +233,15 @@ async fn main() -> Result<()> {
         let result = match command {
             Ok(Command::List) => list(&adapter).await,
             Ok(Command::Scan(duration)) => scan(&adapter, duration).await,
+            Ok(Command::Help) => Ok(help()),
             Ok(Command::Exit) => break,
             Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
 
         if result.is_err() {
             println!("ERR: {:?}", result);
+            println!();
+            help();
         }
     }
 

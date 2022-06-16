@@ -6,6 +6,7 @@ grammar;
 
 pub Command: AstCommand = {
     "list" => AstCommand::List,
+    "help" => AstCommand::Help,
     "scan" <n:Num> => AstCommand::Scan(Duration::from_secs(n)),
     "exit" => AstCommand::Exit,
 }

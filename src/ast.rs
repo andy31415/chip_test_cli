@@ -4,6 +4,7 @@ use std::time::Duration;
 pub enum Command {
     List,
     Scan(Duration),
+    Help,
     Exit,
 }
 
@@ -11,9 +12,10 @@ pub enum Command {
 impl Command {
     pub fn all_strings() -> Vec<String> {
         vec![
+            "exit".to_string(),
+            "help".to_string(),
             "list".to_string(),
             "scan".to_string(),
-            "exit".to_string(),
         ]
     }
 }
