@@ -6,6 +6,10 @@ pub enum Command {
     Scan(Duration),
     Help,
     Exit,
+    
+
+    // Generic test command
+    Test,
 }
 
 
@@ -16,6 +20,8 @@ impl Command {
             "help".to_string(),
             "list".to_string(),
             "scan".to_string(),
+
+            "test".to_string(),
         ]
     }
 }

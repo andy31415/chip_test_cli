@@ -5,10 +5,12 @@ use crate::ast::{Command as AstCommand};
 grammar;
 
 pub Command: AstCommand = {
-    "list" => AstCommand::List,
-    "help" => AstCommand::Help,
     "scan" <n:Num> => AstCommand::Scan(Duration::from_secs(n)),
+
     "exit" => AstCommand::Exit,
+    "help" => AstCommand::Help,
+    "list" => AstCommand::List,
+    "test" => AstCommand::Test,
 }
 
 Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();

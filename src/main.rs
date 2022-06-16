@@ -10,7 +10,7 @@ use log::{info, warn};
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager};
-use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input};
+use dialoguer::{theme::ColorfulTheme, Completion, Input};
 use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
@@ -100,14 +100,14 @@ fn parse_advertising_data(data: &[u8]) -> Result<MatterBleCommissionableData> {
     };
 
     let flags = CommissionableDataFlags::from_bits(flags)
-        .ok_or(anyhow!("Unable to parse flags {:x}", flags))?;
+        .ok_or_else(|| anyhow!("Unable to parse flags {:x}", flags))?;
 
-    return Ok(MatterBleCommissionableData {
+    Ok(MatterBleCommissionableData {
         discriminator,
         vendor_id,
         product_id,
-        flags: flags,
-    });
+        flags,
+    })
 }
 
 struct Commands {
@@ -157,6 +157,12 @@ async fn scan(adapter: &Adapter, duration: Duration) -> Result<()> {
 
     println!("Starting done");
 
+    Ok(())
+}
+
+async fn test(adapter: &Adapter) -> Result<()> {
+    // FIXME: implement
+    println!("NOT YET IMPLEMENTED!");
     Ok(())
 }
 
@@ -231,10 +237,14 @@ async fn main() -> Result<()> {
         info!("Parsed: {:?}", command);
 
         let result = match command {
-            Ok(Command::List) => list(&adapter).await,
-            Ok(Command::Scan(duration)) => scan(&adapter, duration).await,
-            Ok(Command::Help) => Ok(help()),
+            Ok(Command::List) => list(adapter).await,
+            Ok(Command::Scan(duration)) => scan(adapter, duration).await,
+            Ok(Command::Help) => {
+                help();
+                Ok(())
+            },
             Ok(Command::Exit) => break,
+            Ok(Command::Test) => test(adapter).await,
             Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
 
