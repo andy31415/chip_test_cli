@@ -9,7 +9,7 @@ pub enum Command {
     
 
     // Generic test command
-    Test,
+    Test(u64),
 }
 
 

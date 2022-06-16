@@ -10,7 +10,7 @@ pub Command: AstCommand = {
     "exit" => AstCommand::Exit,
     "help" => AstCommand::Help,
     "list" => AstCommand::List,
-    "test" => AstCommand::Test,
+    "test" <n:Num> => AstCommand::Test(n),
 }
 
 Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();

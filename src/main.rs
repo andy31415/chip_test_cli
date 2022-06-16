@@ -4,9 +4,9 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use btleplug::api::bleuuid::uuid_from_u16;
 use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
+use uuid::Uuid;
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager, PeripheralId};
@@ -23,8 +23,17 @@ struct VendorId(u16);
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct ProductId(u16);
+struct MatterUuid;
 
-const MATTER_UUID: uuid::Uuid = uuid_from_u16(0xFFF6);
+impl MatterUuid {
+    // this is the short-version of FFF6
+    const SERVICE: Uuid = Uuid::from_u128(0x0000FFF6_0000_1000_8000_00805F9B34FB);
+
+    const WRITE_CHARACTERISTIC: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D11);
+    const READ_CHARACTERISTIC: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D12);
+    const COMMISSIONING_DATA_CHARACTERISTIC: Uuid =
+        Uuid::from_u128(0x64630238_8772_45F2_B87D_748A83218F04);
+}
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -141,6 +150,7 @@ fn help() {
     println!("Available commands: {}", Command::all_strings().join(", "));
     println!("Some specific syntaxes: ");
     println!("   scan <number_of_seconds> ");
+    println!("   test <list_device_index> ");
 }
 
 /// The execution shell, to be stateful
@@ -177,7 +187,7 @@ impl<'a> Shell<'a> {
             }
             let props = props.unwrap();
 
-            let data = match props.service_data.get(&MATTER_UUID) {
+            let data = match props.service_data.get(&MatterUuid::SERVICE) {
                 None => {
                     warn!("{:?} Does not look like a matter device.", props.address);
                     continue;
@@ -194,11 +204,15 @@ impl<'a> Shell<'a> {
                 }
             };
 
-            if !props.service_data.contains_key(&MATTER_UUID) {}
+            if !props.service_data.contains_key(&MatterUuid::SERVICE) {}
 
-            println!("{} Peripheral {:?}:", self.available_peripherals.len(), peripheral.id());
+            println!(
+                "{} Peripheral {:?}:",
+                self.available_peripherals.len(),
+                peripheral.id()
+            );
             println!("    {:?}", data);
-            
+
             self.available_peripherals.push(peripheral.id());
         }
         Ok(())
@@ -221,9 +235,65 @@ impl<'a> Shell<'a> {
         Ok(())
     }
 
-    async fn test(&self) -> Result<()> {
-        // FIXME: implement
-        println!("NOT YET IMPLEMENTED!");
+    async fn test(&self, idx: usize) -> Result<()> {
+        if idx >= self.available_peripherals.len() {
+            return Err(anyhow!(
+                "No device with index {}. Cached {} devices. Run 'list' to refresh/re-list.",
+                idx,
+                self.available_peripherals.len()
+            ));
+        }
+
+        let peripheral = self
+            .adapter
+            .peripheral(&self.available_peripherals[idx])
+            .await?;
+
+        println!("Got peripheral: {:?}", peripheral.id());
+
+        if !peripheral.is_connected().await? {
+            println!("NOT connected. Conneting now...");
+            peripheral.connect().await?;
+        }
+
+        println!("Device connected. CHIPoBLE can start.");
+        println!("Discovering services...");
+        peripheral.discover_services().await?;
+        println!("Services found");
+
+        for service in peripheral.services() {
+            if service.uuid != MatterUuid::SERVICE {
+                continue;
+            }
+
+            println!("Matter service found: {:?}", service);
+
+            for characteristic in service.characteristics {
+                println!("   Characteristic: {:?}", characteristic);
+
+                if characteristic.uuid == MatterUuid::WRITE_CHARACTERISTIC {
+                    println!("      !! detected WRITE characteristic.")
+                } else if characteristic.uuid == MatterUuid::READ_CHARACTERISTIC {
+                    println!("      !! detected READ characteristic.")
+                } else if characteristic.uuid == MatterUuid::COMMISSIONING_DATA_CHARACTERISTIC {
+                    println!("      !! detected Commission data characteristic.")
+                }
+            }
+        }
+
+        // TODO: once connected, create a bidirectional
+        // MatterOverBle channel to exchange data, try the data exchange
+        //
+        // Write method:
+        //    - write(char, data, writetype)
+        // Read:
+        //    - subscribe(characteristic)  -> to enable notify or indicate. May want to unsuscribe
+        //    - notifications() -> stream of value updates
+        //
+        //      - streams have poll_next
+        //
+        println!("Need more implementation here");
+
         Ok(())
     }
 }
@@ -242,7 +312,7 @@ async fn main() -> Result<()> {
 
     let adapter = adapter_list.first().unwrap();
 
-    info!("MATTER UUID: {:?}", MATTER_UUID);
+    info!("MATTER UUID: {:?}", MatterUuid::SERVICE);
 
     let mut shell = Shell::new(adapter);
 
@@ -265,7 +335,7 @@ async fn main() -> Result<()> {
                 Ok(())
             }
             Ok(Command::Exit) => break,
-            Ok(Command::Test) => shell.test().await,
+            Ok(Command::Test(idx)) => shell.test(idx as usize).await,
             Err(e) => Err(anyhow!("Command parse failed: {:?}", e)),
         };
 
