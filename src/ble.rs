@@ -76,10 +76,10 @@ impl BtpMessageBuffer {
     pub fn set_u8(&mut self, index: usize, value: u8) {
         if self.data.len() < index + 1 {
             self.data.resize(index + 1, 0);
-        } 
+        }
 
         if self.data_len < index + 1 {
-            self.data_len = index+1;
+            self.data_len = index + 1;
         }
         self.data[index] = value;
     }
@@ -225,19 +225,12 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         let mut request = BtpHandshakeRequest::default();
         request.set_segment_size(23); // no idea. Could be something else
         request.set_window_size(244); // no idea either
-
-        println!(
-            "Writing to {:?}: {:?}",
-            self.write_characteristic,
-            request.buffer()
-        );
+                                      //
         self.raw_write(request).await?;
         
-
-        // MUST subscribe AFTER the handshake write
+        // MUST subscribe after request sent
         info!("Subscribing to {:?} ...", self.read_characteristic);
         self.peripheral.subscribe(&self.read_characteristic).await?;
-
 
         // expected response:
         //  0b0110_0101 0x6C (Management OpCode)
@@ -261,6 +254,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
     }
 
     async fn raw_write<B: BtpBuffer>(&self, buffer: B) -> Result<()> {
+        println!("Writing to {:?}: {:?}", self.write_characteristic, buffer.buffer());
         self.peripheral
             .write(
                 &self.write_characteristic,

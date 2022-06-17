@@ -14,7 +14,7 @@ use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
 
-use crate::ble::{BlePeripheralConnection};
+use crate::ble::BlePeripheralConnection;
 
 lalrpop_mod!(pub cli);
 mod ast;
@@ -247,10 +247,8 @@ impl<'a> Shell<'a> {
         println!("Got peripheral: {:?}", peripheral.id());
 
         let conn = BlePeripheralConnection::new(peripheral).await?;
-        
 
         conn.handshake().await?;
-
 
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
