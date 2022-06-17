@@ -251,8 +251,39 @@ impl<'a> Shell<'a> {
         // TODO: figure out something that looks real-ish
         //   - proper CHIPoBLE framing and ack stuff
         //   - real data
-        conn.write(&[0, 1, 2, 3, 4, 5, 6, 7], WriteType::WithResponse)
-            .await?;
+
+        // #define CAPABILITIES_MSG_CHECK_BYTE_1 0b01100101
+        // #define CAPABILITIES_MSG_CHECK_BYTE_2 0b01101100
+        const CAPABILITES_CHECK_1: u8 = 0b0110_0101;
+        const MANAGEMENT_OPCODE: u8 = 0x6C;
+
+        // Next there are 8 version bits:
+        //   - 0 is unused
+        //   - 4 is BTP for CHIP 1.0
+
+        const SEGMENT_SIZE: u16 = 517; // MTU ... no idea how to get or set
+        const CLIENT_WINDOW_SIZE: u8 = 0x00;
+
+        // CapabilitiesRequestLength minimum size is 9
+        conn.write(
+            &[
+                CAPABILITES_CHECK_1,
+                MANAGEMENT_OPCODE,
+                0x40,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                (SEGMENT_SIZE & 0xFF) as u8,
+                ((SEGMENT_SIZE >> 8) & 0xFF) as u8,
+                CLIENT_WINDOW_SIZE,
+            ],
+            WriteType::WithResponse,
+        )
+        .await?;
 
         let data = conn.read().await?;
 
