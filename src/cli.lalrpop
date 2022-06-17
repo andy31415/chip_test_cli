@@ -8,6 +8,7 @@ pub Command: AstCommand = {
     "scan" <n:Num> => AstCommand::Scan(Duration::from_secs(n)),
 
     "exit" => AstCommand::Exit,
+    "quit" => AstCommand::Exit,
     "help" => AstCommand::Help,
     "list" => AstCommand::List,
     "test" <n:Num> => AstCommand::Test(n),

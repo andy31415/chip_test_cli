@@ -7,14 +7,14 @@ use anyhow::{anyhow, Result};
 use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
 
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter, WriteType};
+use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager, PeripheralId};
 use dialoguer::{theme::ColorfulTheme, Completion, Input};
 use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
 
-use crate::ble::{AsyncConnection, BlePeripheralConnection};
+use crate::ble::{BlePeripheralConnection};
 
 lalrpop_mod!(pub cli);
 mod ast;
@@ -246,48 +246,11 @@ impl<'a> Shell<'a> {
 
         println!("Got peripheral: {:?}", peripheral.id());
 
-        let mut conn = BlePeripheralConnection::new(peripheral).await?;
+        let conn = BlePeripheralConnection::new(peripheral).await?;
+        
 
-        // TODO: figure out something that looks real-ish
-        //   - proper CHIPoBLE framing and ack stuff
-        //   - real data
+        conn.handshake().await?;
 
-        // #define CAPABILITIES_MSG_CHECK_BYTE_1 0b01100101
-        // #define CAPABILITIES_MSG_CHECK_BYTE_2 0b01101100
-        const CAPABILITES_CHECK_1: u8 = 0b0110_0101;
-        const MANAGEMENT_OPCODE: u8 = 0x6C;
-
-        // Next there are 8 version bits:
-        //   - 0 is unused
-        //   - 4 is BTP for CHIP 1.0
-
-        const SEGMENT_SIZE: u16 = 517; // MTU ... no idea how to get or set
-        const CLIENT_WINDOW_SIZE: u8 = 0x00;
-
-        // CapabilitiesRequestLength minimum size is 9
-        conn.write(
-            &[
-                CAPABILITES_CHECK_1,
-                MANAGEMENT_OPCODE,
-                0x40,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                (SEGMENT_SIZE & 0xFF) as u8,
-                ((SEGMENT_SIZE >> 8) & 0xFF) as u8,
-                CLIENT_WINDOW_SIZE,
-            ],
-            WriteType::WithResponse,
-        )
-        .await?;
-
-        let data = conn.read().await?;
-
-        println!("BLE DATA received: {:?}", data);
 
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
