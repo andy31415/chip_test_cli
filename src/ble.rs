@@ -145,6 +145,39 @@ impl BtpBuffer for BtpHandshakeRequest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+struct BtpHandshakeResponse {
+    selected_segment_size: u16,
+    selected_window_size: u8,
+}
+
+impl BtpHandshakeResponse {
+    fn parse(buffer: &[u8]) -> Result<BtpHandshakeResponse> {
+        match buffer {
+            [flags, opcode, protocol, segment_l, segment_h, window_size] => {
+                if *flags != BtpFlags::HANDSHAKE_RESPONSE.bits {
+                    return Err(anyhow!("Invalid response flags: 0x{:X}", flags))
+                }
+
+                if *opcode != MANAGEMENT_OPCODE {
+                    return Err(anyhow!("Invalid management opcode: 0x{:X}", opcode))
+                }
+                
+                // technically we should only look at low bits, but then reserved should be 0 anyway
+                if *protocol != BTP_PROTOCOL_VERSION {
+                    return Err(anyhow!("Invalid protocol: 0x{:X}", protocol))
+                }
+                
+                Ok((BtpHandshakeResponse{
+                    selected_segment_size: ((*segment_h as u16) << 8) | (*segment_l as u16),
+                    selected_window_size: *window_size,
+                }))
+            }
+            _ => Err(anyhow!("Invalid data length. Expected 6, got {} instead.", buffer.len()))
+        }
+    }
+}
+
 #[async_trait]
 pub trait AsyncConnection {
     async fn write(&self, data: &[u8]) -> Result<()>;
@@ -247,23 +280,11 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         self.peripheral.subscribe(&self.read_characteristic).await?;
 
         
-        // expected response:
-        //  0b0110_0101 0x6C (Management OpCode)
-        //  0x?V where V is the protocol version. Likely 0x04
-        //  0x.. BTP segment size (one byte)
-        //  window size (2 bytes)
         println!("Reading ...");
 
-        let data = self.read().await?;
+        let response = BtpHandshakeResponse::parse(self.read().await?.as_slice())?;
 
-        println!("BLE DATA received: {:?}", data);
-
-        // Handshake response
-        //  - 0b01100101
-        //  - Management OpCode = 0x6C
-        //  - 0x?V - protocol version
-        //  - 0xXXXX - 16-bit segment size
-        //  - 0xXX - 8-bit window size
+        println!("Handshake response: {:?}", response);
 
         Ok(())
     }
