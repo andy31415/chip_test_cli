@@ -73,10 +73,6 @@ struct BtpMessageBuffer {
 }
 
 impl BtpMessageBuffer {
-    pub fn clear(&mut self) {
-        self.data_len = 0;
-    }
-
     pub fn set_u8(&mut self, index: usize, value: u8) {
         if self.data.len() < index + 1 {
             self.data.resize(index + 1, 0);
