@@ -246,7 +246,7 @@ impl<'a> Shell<'a> {
 
         println!("Got peripheral: {:?}", peripheral.id());
 
-        let conn = BlePeripheralConnection::new(peripheral).await?;
+        let mut conn = BlePeripheralConnection::new(peripheral).await?;
 
         conn.handshake().await?;
 

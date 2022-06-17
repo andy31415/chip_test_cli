@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -6,10 +8,12 @@ use btleplug::api::Characteristic;
 use btleplug::api::Peripheral;
 use btleplug::api::ValueNotification;
 use btleplug::api::WriteType;
+use futures::Stream;
 use futures::StreamExt;
 use log::debug;
 use log::info;
 use log::warn;
+use tokio::sync::Mutex;
 
 pub mod uuids {
 
@@ -143,15 +147,22 @@ impl BtpBuffer for BtpHandshakeRequest {
 
 #[async_trait]
 pub trait AsyncConnection {
-    async fn write(&self, data: &[u8], write_type: WriteType) -> Result<()>;
-    async fn read(&self) -> Result<Vec<u8>>;
+    async fn write(&self, data: &[u8]) -> Result<()>;
+    async fn read(&mut self) -> Result<Vec<u8>>;
 }
 
 pub struct BlePeripheralConnection<P: Peripheral> {
     peripheral: P,
     write_characteristic: Characteristic,
     read_characteristic: Characteristic,
+    notifications: Mutex<Pin<Box<dyn Stream<Item = ValueNotification> + Send>>>,
 }
+
+// TODO: this seems required for async trait implementation
+//
+// It seems 'notifications' is not sync but it should be.
+// Need to figure it out
+//unsafe impl<P:Peripheral> Sync for BlePeripheralConnection<P>{}
 
 impl<P: Peripheral> BlePeripheralConnection<P> {
     pub async fn new(peripheral: P) -> Result<BlePeripheralConnection<P>> {
@@ -212,26 +223,30 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
             (Some(read_characteristic), Some(write_characteristic)) => {
                 info!("Device {:?} supports read/write for CHIPoBLE", peripheral);
 
+                let notifications = Mutex::new(peripheral.notifications().await?);
+
                 Ok(Self {
                     peripheral,
                     write_characteristic,
                     read_characteristic,
+                    notifications,
                 })
             }
         }
     }
 
-    pub async fn handshake(&self) -> Result<()> {
+    pub async fn handshake(&mut self) -> Result<()> {
         let mut request = BtpHandshakeRequest::default();
-        request.set_segment_size(23); // no idea. Could be something else
-        request.set_window_size(244); // no idea either
-                                      //
+        request.set_segment_size(247); // no idea. Could be something else
+        request.set_window_size(6);    // no idea either
+                                       //
         self.raw_write(request).await?;
         
-        // MUST subscribe after request sent
+        // TODO: subscribe after handshake? 
         info!("Subscribing to {:?} ...", self.read_characteristic);
         self.peripheral.subscribe(&self.read_characteristic).await?;
 
+        
         // expected response:
         //  0b0110_0101 0x6C (Management OpCode)
         //  0x?V where V is the protocol version. Likely 0x04
@@ -269,18 +284,13 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
 #[async_trait]
 impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
-    async fn write(&self, data: &[u8], write_type: WriteType) -> Result<()> {
-        self.peripheral
-            .write(&self.write_characteristic, data, write_type)
-            .await?;
-
-        Ok(())
+    async fn write(&self, data: &[u8]) -> Result<()> {
+        Err(anyhow!("not yet implemented"))
     }
 
-    async fn read(&self) -> Result<Vec<u8>> {
-        let mut notifications = self.peripheral.notifications().await?;
+    async fn read(&mut self) -> Result<Vec<u8>> {
         loop {
-            let value = notifications.next().await;
+            let value = self.notifications.lock().await.next().await;
             match value {
                 None => return Err(anyhow!("No more data")),
                 Some(ValueNotification {
