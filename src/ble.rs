@@ -156,24 +156,27 @@ impl BtpHandshakeResponse {
         match buffer {
             [flags, opcode, protocol, segment_l, segment_h, window_size] => {
                 if *flags != BtpFlags::HANDSHAKE_RESPONSE.bits {
-                    return Err(anyhow!("Invalid response flags: 0x{:X}", flags))
+                    return Err(anyhow!("Invalid response flags: 0x{:X}", flags));
                 }
 
                 if *opcode != MANAGEMENT_OPCODE {
-                    return Err(anyhow!("Invalid management opcode: 0x{:X}", opcode))
+                    return Err(anyhow!("Invalid management opcode: 0x{:X}", opcode));
                 }
-                
+
                 // technically we should only look at low bits, but then reserved should be 0 anyway
                 if *protocol != BTP_PROTOCOL_VERSION {
-                    return Err(anyhow!("Invalid protocol: 0x{:X}", protocol))
+                    return Err(anyhow!("Invalid protocol: 0x{:X}", protocol));
                 }
-                
-                Ok((BtpHandshakeResponse{
+
+                Ok(BtpHandshakeResponse {
                     selected_segment_size: ((*segment_h as u16) << 8) | (*segment_l as u16),
                     selected_window_size: *window_size,
-                }))
+                })
             }
-            _ => Err(anyhow!("Invalid data length. Expected 6, got {} instead.", buffer.len()))
+            _ => Err(anyhow!(
+                "Invalid data length. Expected 6, got {} instead.",
+                buffer.len()
+            )),
         }
     }
 }
@@ -271,15 +274,14 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
     pub async fn handshake(&mut self) -> Result<()> {
         let mut request = BtpHandshakeRequest::default();
         request.set_segment_size(247); // no idea. Could be something else
-        request.set_window_size(6);    // no idea either
-                                       //
+        request.set_window_size(6); // no idea either
+                                    //
         self.raw_write(request).await?;
-        
-        // TODO: subscribe after handshake? 
+
+        // TODO: subscribe after handshake?
         info!("Subscribing to {:?} ...", self.read_characteristic);
         self.peripheral.subscribe(&self.read_characteristic).await?;
 
-        
         println!("Reading ...");
 
         let response = BtpHandshakeResponse::parse(self.read().await?.as_slice())?;
@@ -290,7 +292,11 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
     }
 
     async fn raw_write<B: BtpBuffer>(&self, buffer: B) -> Result<()> {
-        println!("Writing to {:?}: {:?}", self.write_characteristic, buffer.buffer());
+        println!(
+            "Writing to {:?}: {:?}",
+            self.write_characteristic,
+            buffer.buffer()
+        );
         self.peripheral
             .write(
                 &self.write_characteristic,
@@ -305,13 +311,30 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
 #[async_trait]
 impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
-    async fn write(&self, data: &[u8]) -> Result<()> {
-        Err(anyhow!("not yet implemented"))
+    async fn write(&self, _data: &[u8]) -> Result<()> {
+        // TODO items:
+        //   - figure out framing
+        //   - setup send and receive acks.
+        //
+        // General spec tips:
+        //   - first buffer is the "Begin" frame
+        //   - last buffer is the "End" frame
+        //
+        //   - there seems to be a limit on number of in flight packets (is there?
+        //     I expect window sizese to be considered here. Need to read spec more.)
+        //   - need to respect sizes received inside handshake.
+        todo!();
     }
 
     async fn read(&mut self) -> Result<Vec<u8>> {
+        // TODO: Reads should be able to unpack data
+        //       likely want 'raw read' (no unpacking)
+        //       and let this impl actually be used for general packets.
         loop {
-            let value = self.notifications.lock().await.next().await;
+            let value = {
+                let mut guard = self.notifications.lock().await;
+                guard.next().await
+            };
             match value {
                 None => return Err(anyhow!("No more data")),
                 Some(ValueNotification {
