@@ -85,6 +85,7 @@ dependencies = [
  "btleplug",
  "byteorder",
  "dialoguer",
+ "futures",
  "lalrpop",
  "lalrpop-util",
  "log",

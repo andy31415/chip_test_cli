@@ -3,9 +3,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use btleplug::api::Characteristic;
 use btleplug::api::Peripheral;
+use btleplug::api::ValueNotification;
 use btleplug::api::WriteType;
+use futures::StreamExt;
 use log::debug;
 use log::info;
+use log::warn;
 
 pub mod uuids {
 
@@ -27,7 +30,8 @@ pub mod uuids {
 
 #[async_trait]
 pub trait AsyncConnection {
-    async fn write(&mut self, data: &[u8], write_type: WriteType) -> Result<()>;
+    async fn write(&self, data: &[u8], write_type: WriteType) -> Result<()>;
+    async fn read(&mut self) -> Result<Vec<u8>>;
 }
 
 pub struct BlePeripheralConnection<P: Peripheral> {
@@ -93,7 +97,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
             )),
             (Some(read_characteristic), Some(write_characteristic)) => {
                 info!("Device {:?} supports read/write for CHIPoBLE", peripheral);
-                
+
                 peripheral.subscribe(&read_characteristic).await?;
 
                 Ok(Self {
@@ -107,11 +111,28 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
 #[async_trait]
 impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
-    async fn write(&mut self, data: &[u8], write_type: WriteType) -> Result<()> {
+    async fn write(&self, data: &[u8], write_type: WriteType) -> Result<()> {
         self.peripheral
             .write(&self.write_characteristic, data, write_type)
             .await?;
 
         Ok(())
+    }
+
+    async fn read(&mut self) -> Result<Vec<u8>> {
+        let mut notifications = self.peripheral.notifications().await?;
+        loop {
+            let value = notifications.next().await;
+            match value {
+                None => return Err(anyhow!("No more data")),
+                Some(ValueNotification {
+                    uuid: uuids::Characteristics::READ,
+                    value,
+                }) => return Ok(value),
+                Some(other_value) => {
+                    warn!("Unexpected notification: {:?}", other_value);
+                }
+            }
+        }
     }
 }

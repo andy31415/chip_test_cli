@@ -254,6 +254,10 @@ impl<'a> Shell<'a> {
         conn.write(&[0, 1, 2, 3, 4, 5, 6, 7], WriteType::WithResponse)
             .await?;
 
+        let data = conn.read().await?;
+
+        println!("BLE DATA received: {:?}", data);
+
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
         //   - decode data
