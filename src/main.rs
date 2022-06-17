@@ -16,7 +16,11 @@ use lalrpop_util::lalrpop_mod;
 
 use crate::ble::BlePeripheralConnection;
 
-lalrpop_mod!(pub cli);
+
+lalrpop_mod!(
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::all))]
+    pub cli
+);
 mod ast;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
