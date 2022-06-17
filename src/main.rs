@@ -7,14 +7,14 @@ use anyhow::{anyhow, Result};
 use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
 
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter, WriteType};
 use btleplug::platform::{Adapter, Manager, PeripheralId};
 use dialoguer::{theme::ColorfulTheme, Completion, Input};
 use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
 
-use crate::ble::BlePeripheralConnection;
+use crate::ble::{BlePeripheralConnection, AsyncConnection};
 
 lalrpop_mod!(pub cli);
 mod ast;
@@ -246,19 +246,22 @@ impl<'a> Shell<'a> {
 
         println!("Got peripheral: {:?}", peripheral.id());
         
-        let conn = BlePeripheralConnection::new(peripheral);
+        let mut conn = BlePeripheralConnection::new(peripheral).await?;
+        
+        // TODO: figure out something that looks real-ish
+        //   - proper CHIPoBLE framing and ack stuff
+        //   - real data
+        conn.write(&[0,1,2,3,4,5,6,7], WriteType::WithResponse).await?;
+        
+        // TODO: try to receive some data
+        //   - unpack CHIPoBLE framing
+        //   - decode data
 
-        // TODO: once connected, create a bidirectional
-        // MatterOverBle channel to exchange data, try the data exchange
-        //
-        // Write method:
-        //    - write(char, data, writetype)
-        // Read:
-        //    - subscribe(characteristic)  -> to enable notify or indicate. May want to unsuscribe
-        //    - notifications() -> stream of value updates
-        //
-        //      - streams have poll_next
-        //
+        // TODO:
+        //   - send again (Sigma3) and validate
+        
+        // TODO:
+        //   - start implementing CHIP framing after that!
         println!("Need more implementation here");
 
         Ok(())
