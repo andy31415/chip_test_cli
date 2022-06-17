@@ -14,7 +14,7 @@ use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
 
-use crate::ble::{BlePeripheralConnection, AsyncConnection};
+use crate::ble::{AsyncConnection, BlePeripheralConnection};
 
 lalrpop_mod!(pub cli);
 mod ast;
@@ -245,21 +245,22 @@ impl<'a> Shell<'a> {
             .await?;
 
         println!("Got peripheral: {:?}", peripheral.id());
-        
+
         let mut conn = BlePeripheralConnection::new(peripheral).await?;
-        
+
         // TODO: figure out something that looks real-ish
         //   - proper CHIPoBLE framing and ack stuff
         //   - real data
-        conn.write(&[0,1,2,3,4,5,6,7], WriteType::WithResponse).await?;
-        
+        conn.write(&[0, 1, 2, 3, 4, 5, 6, 7], WriteType::WithResponse)
+            .await?;
+
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
         //   - decode data
 
         // TODO:
         //   - send again (Sigma3) and validate
-        
+
         // TODO:
         //   - start implementing CHIP framing after that!
         println!("Need more implementation here");
