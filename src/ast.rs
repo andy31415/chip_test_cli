@@ -6,12 +6,10 @@ pub enum Command {
     Scan(Duration),
     Help,
     Exit,
-    
 
     // Generic test command
     Test(u64),
 }
-
 
 impl Command {
     pub fn all_strings() -> Vec<String> {
@@ -20,7 +18,6 @@ impl Command {
             "help".to_string(),
             "list".to_string(),
             "scan".to_string(),
-
             "test".to_string(),
         ]
     }

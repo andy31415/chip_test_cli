@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use byteorder::{ByteOrder, LittleEndian};
 use log::{info, warn};
-use uuid::Uuid;
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager, PeripheralId};
@@ -14,6 +13,8 @@ use dialoguer::{theme::ColorfulTheme, Completion, Input};
 use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
+
+use crate::ble::BlePeripheralConnection;
 
 lalrpop_mod!(pub cli);
 mod ast;
@@ -23,17 +24,8 @@ struct VendorId(u16);
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct ProductId(u16);
-struct MatterUuid;
 
-impl MatterUuid {
-    // this is the short-version of FFF6
-    const SERVICE: Uuid = Uuid::from_u128(0x0000FFF6_0000_1000_8000_00805F9B34FB);
-
-    const WRITE_CHARACTERISTIC: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D11);
-    const READ_CHARACTERISTIC: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D12);
-    const COMMISSIONING_DATA_CHARACTERISTIC: Uuid =
-        Uuid::from_u128(0x64630238_8772_45F2_B87D_748A83218F04);
-}
+mod ble;
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -187,7 +179,7 @@ impl<'a> Shell<'a> {
             }
             let props = props.unwrap();
 
-            let data = match props.service_data.get(&MatterUuid::SERVICE) {
+            let data = match props.service_data.get(&ble::uuids::Services::MATTER) {
                 None => {
                     warn!("{:?} Does not look like a matter device.", props.address);
                     continue;
@@ -204,7 +196,10 @@ impl<'a> Shell<'a> {
                 }
             };
 
-            if !props.service_data.contains_key(&MatterUuid::SERVICE) {}
+            if !props
+                .service_data
+                .contains_key(&ble::uuids::Services::MATTER)
+            {}
 
             println!(
                 "{} Peripheral {:?}:",
@@ -250,36 +245,8 @@ impl<'a> Shell<'a> {
             .await?;
 
         println!("Got peripheral: {:?}", peripheral.id());
-
-        if !peripheral.is_connected().await? {
-            println!("NOT connected. Conneting now...");
-            peripheral.connect().await?;
-        }
-
-        println!("Device connected. CHIPoBLE can start.");
-        println!("Discovering services...");
-        peripheral.discover_services().await?;
-        println!("Services found");
-
-        for service in peripheral.services() {
-            if service.uuid != MatterUuid::SERVICE {
-                continue;
-            }
-
-            println!("Matter service found: {:?}", service);
-
-            for characteristic in service.characteristics {
-                println!("   Characteristic: {:?}", characteristic);
-
-                if characteristic.uuid == MatterUuid::WRITE_CHARACTERISTIC {
-                    println!("      !! detected WRITE characteristic.")
-                } else if characteristic.uuid == MatterUuid::READ_CHARACTERISTIC {
-                    println!("      !! detected READ characteristic.")
-                } else if characteristic.uuid == MatterUuid::COMMISSIONING_DATA_CHARACTERISTIC {
-                    println!("      !! detected Commission data characteristic.")
-                }
-            }
-        }
+        
+        let conn = BlePeripheralConnection::new(peripheral);
 
         // TODO: once connected, create a bidirectional
         // MatterOverBle channel to exchange data, try the data exchange
@@ -311,8 +278,6 @@ async fn main() -> Result<()> {
     }
 
     let adapter = adapter_list.first().unwrap();
-
-    info!("MATTER UUID: {:?}", MatterUuid::SERVICE);
 
     let mut shell = Shell::new(adapter);
 
