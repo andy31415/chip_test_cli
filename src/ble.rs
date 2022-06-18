@@ -1,18 +1,12 @@
 use std::pin::Pin;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitflags::bitflags;
 use btleplug::api::Characteristic;
-use btleplug::api::Peripheral;
-use btleplug::api::ValueNotification;
-use btleplug::api::WriteType;
-use futures::Stream;
-use futures::StreamExt;
-use log::debug;
-use log::info;
-use log::warn;
+use btleplug::api::{Peripheral, ValueNotification, WriteType};
+use futures::{Stream, StreamExt};
+use log::{debug, info, warn};
 use tokio::sync::Mutex;
 
 pub mod uuids {
@@ -187,14 +181,11 @@ pub struct BlePeripheralConnection<P: Peripheral> {
     peripheral: P,
     write_characteristic: Characteristic,
     read_characteristic: Characteristic,
+
+    // NOTE: usage of Mutex because async_trait marks returns as Send
+    //       The Pin below is also send because btleplug uses async_trait itself
     notifications: Mutex<Pin<Box<dyn Stream<Item = ValueNotification> + Send>>>,
 }
-
-// TODO: this seems required for async trait implementation
-//
-// It seems 'notifications' is not sync but it should be.
-// Need to figure it out
-//unsafe impl<P:Peripheral> Sync for BlePeripheralConnection<P>{}
 
 impl<P: Peripheral> BlePeripheralConnection<P> {
     pub async fn new(peripheral: P) -> Result<BlePeripheralConnection<P>> {
@@ -271,10 +262,9 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         let mut request = BtpHandshakeRequest::default();
         request.set_segment_size(247); // no idea. Could be something else
         request.set_window_size(6); // no idea either
-                                    //
+
         self.raw_write(request).await?;
 
-        // TODO: subscribe after handshake?
         info!("Subscribing to {:?} ...", self.read_characteristic);
         self.peripheral.subscribe(&self.read_characteristic).await?;
 
