@@ -62,7 +62,14 @@ impl PacketWindowState {
     /// When sending, this is the packet count sent but not acknowledged.
     /// For receiving, this is the packet count received but without an ack
     /// having been sent to the remote.
-    fn unacknowledged_size(&self) -> u8 {
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// let state = PacketWindowState::default(); // starts as 0
+    /// assert_eq!(state.unacknowledged_count(), 0);
+    /// ```
+    fn unacknowledged_count(&self) -> u8 {
         self.last_packet_number.wrapping_sub(self.ack_number)
     }
 }
@@ -90,7 +97,7 @@ pub struct BtpWindowState {
 }
 
 impl BtpWindowState {
-    fn new(window_size: u8) -> Self {
+    pub fn new(window_size: u8) -> Self {
         Self {
             window_size,
             sent_packets: PacketWindowState::default(),
