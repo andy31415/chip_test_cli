@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -8,6 +9,95 @@ use btleplug::api::{Peripheral, ValueNotification, WriteType};
 use futures::{Stream, StreamExt};
 use log::{debug, info, warn};
 use tokio::sync::Mutex;
+
+/// The maximum amount of time after sending a HandshakeRequest
+/// to wait for a HandshakeResponse before closing a connection.
+const SESSION_HANDSHAKE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The maximum amount of time after receipt of a segment before
+/// a stand-alone ack MUST be sent.
+const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// The maximum amount of time no unique data has been sent over
+/// a BTP session before a Central device must close the BTP session.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Represents the state of windowed packets for Btp
+#[derive(Debug, PartialEq)]
+struct PacketWindowState {
+    /// Last time a packet was seen and processed
+    last_seen_time: Instant,
+
+    /// Packet number of last seen packet.
+    ///
+    /// When sending packets, this is the number of the last packet
+    /// that was sent
+    ///
+    /// When receiving, this is the number of the last packet received.
+    last_packet_number: u8,
+
+    /// what packet number was acknowledged.
+    ///
+    /// When sending, this is the packet number that was last acknowledged
+    /// by the remote side.
+    ///
+    /// When receiving, this is the packet number that was acknowledged
+    /// to the remote as having been received.
+    ack_number: u8,
+}
+
+impl Default for PacketWindowState {
+    fn default() -> Self {
+        Self {
+            last_seen_time: Instant::now(),
+            last_packet_number: 0,
+            ack_number: 0, // NOTE: this assumes packet WAS acknowledged
+        }
+    }
+}
+
+impl PacketWindowState {
+    /// Returns number of packets unacknowledged.
+    ///
+    /// When sending, this is the packet count sent but not acknowledged.
+    /// For receiving, this is the packet count received but without an ack
+    /// having been sent to the remote.
+    fn unacknowledged_size(&self) -> u8 {
+        self.last_packet_number.wrapping_sub(self.ack_number)
+    }
+}
+
+/// Represents a transmission status for a BTP connection.
+///
+/// BTP connections are managing packets to/from a remote
+/// side, while considering open window sizes on each side.
+#[derive(Debug, PartialEq)]
+pub struct BtpWindowState {
+    /// The negociated window size. This is how many packets
+    /// could be in flight without confirmation. The implementation
+    /// must ensure that:
+    ///    - it never sends more items than this size
+    ///    - it must not allow both sides to have their window filled
+    ///      without an ACK number in them (deadlock since no ack is
+    ///      possible anymore if that happens)
+    window_size: u8,
+
+    /// packets sent towards the remote
+    sent_packets: PacketWindowState,
+
+    /// Packets received from the remote side
+    received_packets: PacketWindowState,
+}
+
+impl BtpWindowState {
+    fn new(window_size: u8) -> Self {
+        Self {
+            window_size,
+            sent_packets: PacketWindowState::default(),
+            received_packets: PacketWindowState::default(),
+        }
+    }
+}
 
 pub mod uuids {
 
