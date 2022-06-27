@@ -775,10 +775,16 @@ mod test {
     }
 
     #[test]
-    fn btp_window_example() {
-        // this example is the Matter example for BTP
-        // interactions for a window size 4
+    fn btp_window_matches_spec_sample() {
+        // this example is the Matter example for BTP interactions for a window size 4
         let mut pipe = ClientServerPipe::new(4);
+
+        // Sufficient window available, do not worry about needing to send acks.
+        pipe.expect_wait_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT,
+        );
 
         pipe.expect_send(
             SendDirection::ClientToServer,
@@ -844,6 +850,13 @@ mod test {
                 sequence_number: 2,
                 ack_number: Some(2),
             },
+        );
+
+        // Connection is in idle state ... client side also waits
+        pipe.expect_wait_send(
+            SendDirection::ClientToServer,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT,
         );
     }
 }
