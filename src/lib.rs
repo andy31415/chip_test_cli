@@ -690,123 +690,160 @@ mod test {
 
     use mock_instant::MockClock;
 
-    use crate::{BtpSendData, BtpWindowState, PacketSequenceInfo, ACKNOWLEDGE_TIMEOUT};
+    use crate::{BtpSendData, BtpWindowState, PacketData, PacketSequenceInfo, ACKNOWLEDGE_TIMEOUT};
+
+    #[derive(PartialEq)]
+    enum SendDirection {
+        ClientToServer,
+        ServerToClient,
+    }
+
+    struct ClientServerPipe {
+        client: BtpWindowState,
+        server: BtpWindowState,
+    }
+
+    impl ClientServerPipe {
+        pub(crate) fn new(window_size: u8) -> Self {
+            Self {
+                client: BtpWindowState::client(window_size),
+                server: BtpWindowState::server(window_size),
+            }
+        }
+
+        pub(crate) fn expect_wait_send(
+            &mut self,
+            direction: SendDirection,
+            data: PacketData,
+            duration: Duration,
+        ) {
+            if direction == SendDirection::ClientToServer {
+                ClientServerPipe::expect_wait_send_impl(&mut self.client, data, duration)
+            } else {
+                ClientServerPipe::expect_wait_send_impl(&mut self.server, data, duration)
+            }
+        }
+
+        pub(crate) fn expect_send(
+            &mut self,
+            direction: SendDirection,
+            data: PacketData,
+            packet: PacketSequenceInfo,
+        ) {
+            if direction == SendDirection::ClientToServer {
+                ClientServerPipe::expect_send_impl(&mut self.client, &mut self.server, data, packet)
+            } else {
+                ClientServerPipe::expect_send_impl(&mut self.server, &mut self.client, data, packet)
+            }
+        }
+
+        pub(crate) fn expect_send_impl(
+            src: &mut BtpWindowState,
+            dst: &mut BtpWindowState,
+            data: PacketData,
+            packet: PacketSequenceInfo,
+        ) {
+            match src.prepare_send(data) {
+                Ok(BtpSendData::Send(data)) => assert_eq!(data, packet),
+                different => assert!(
+                    false,
+                    "Prepare send should have been {:?} but was {:?} instead",
+                    packet, different
+                ),
+            }
+
+            match dst.packet_received(packet) {
+                Ok(_) => {}
+                Err(e) => assert!(false, "Failed to accept receiving of {:?}", e),
+            }
+        }
+
+        pub(crate) fn expect_wait_send_impl(
+            state: &mut BtpWindowState,
+            data: PacketData,
+            expected_duration: Duration,
+        ) {
+            match state.prepare_send(data) {
+                Ok(BtpSendData::Wait { duration }) => assert_eq!(duration, expected_duration),
+                different => assert!(
+                    false,
+                    "Expected a wait of  {:?} but was {:?} instead",
+                    expected_duration, different
+                ),
+            }
+        }
+    }
 
     #[test]
     fn btp_window_example() {
         // this example is the Matter example for BTP
         // interactions for a window size 4
-        let mut client_state = BtpWindowState::client(4);
-        let mut server_state = BtpWindowState::server(4);
+        let mut pipe = ClientServerPipe::new(4);
 
-        let s = client_state
-            .prepare_send(crate::PacketData::HasData)
-            .unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Send(PacketSequenceInfo {
+        pipe.expect_send(
+            SendDirection::ClientToServer,
+            PacketData::HasData,
+            PacketSequenceInfo {
                 sequence_number: 0,
-                ack_number: Some(0)
-            })
+                ack_number: Some(0),
+            },
         );
 
-        if let BtpSendData::Send(s) = s {
-            assert!(server_state.packet_received(s).is_ok());
-        } else {
-            assert!(false);
-        }
-
-        // Server does not need to send anything - internal window still has space
-        assert_eq!(
-            server_state.prepare_send(crate::PacketData::None).unwrap(),
-            BtpSendData::Wait {
-                duration: ACKNOWLEDGE_TIMEOUT,
-            }
+        // Sufficient window available, do not worry about needing to send acks.
+        pipe.expect_wait_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT,
         );
-
-        let s = client_state
-            .prepare_send(crate::PacketData::HasData)
-            .unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Send(PacketSequenceInfo {
+        pipe.expect_send(
+            SendDirection::ClientToServer,
+            PacketData::HasData,
+            PacketSequenceInfo {
                 sequence_number: 1,
                 ack_number: None,
-            })
+            },
         );
-        if let BtpSendData::Send(s) = s {
-            assert!(server_state.packet_received(s).is_ok());
-        } else {
-            assert!(false);
-        }
 
-        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        //  expect ACK being sent right away as only 2 slots remain in the client window
-        assert_eq!(
-            s,
-            BtpSendData::Send(PacketSequenceInfo {
+        // only 2 window slots remain, send ack early
+        pipe.expect_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            PacketSequenceInfo {
                 sequence_number: 1,
-                ack_number: Some(1)
-            })
+                ack_number: Some(1),
+            },
         );
 
-        if let BtpSendData::Send(s) = s {
-            assert!(client_state.packet_received(s).is_ok());
-        } else {
-            assert!(false);
-        }
-
-        // server does not need to send data
-        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Wait {
-                duration: ACKNOWLEDGE_TIMEOUT,
-            }
-        );
-
-        let s = client_state
-            .prepare_send(crate::PacketData::HasData)
-            .unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Send(PacketSequenceInfo {
+        pipe.expect_send(
+            SendDirection::ClientToServer,
+            PacketData::HasData,
+            PacketSequenceInfo {
                 sequence_number: 2,
                 ack_number: Some(1),
-            })
-        );
-        if let BtpSendData::Send(s) = s {
-            assert!(server_state.packet_received(s).is_ok());
-        } else {
-            assert!(false);
-        }
-
-        // server does not need to send data
-        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Wait {
-                duration: ACKNOWLEDGE_TIMEOUT,
-            }
+            },
         );
 
+        pipe.expect_wait_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT,
+        );
         MockClock::advance(Duration::from_secs(1));
 
-        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Wait {
-                duration: ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1),
-            }
+        pipe.expect_wait_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1),
         );
         MockClock::advance(ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1));
-        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        assert_eq!(
-            s,
-            BtpSendData::Send(PacketSequenceInfo {
+
+        pipe.expect_send(
+            SendDirection::ServerToClient,
+            PacketData::None,
+            PacketSequenceInfo {
                 sequence_number: 2,
-                ack_number: Some(2)
-            })
+                ack_number: Some(2),
+            },
         );
     }
 }
