@@ -20,6 +20,11 @@ regex = "1"
 async-trait = "0.1.56"
 futures = "0.3.21"
 
+[lib]
+path = "src/ble.rs"
+
+[[bin]]
+name = "ble_discovery"
 
 [build-dependencies]
 lalrpop = "0.19.7"

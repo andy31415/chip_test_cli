@@ -28,7 +28,7 @@ struct VendorId(u16);
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct ProductId(u16);
 
-mod ble;
+pub mod ble;
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

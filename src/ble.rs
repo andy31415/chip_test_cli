@@ -24,7 +24,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Represents the state of windowed packets for Btp
 #[derive(Debug, PartialEq)]
-struct PacketWindowState {
+pub struct PacketWindowState {
     /// Last time a packet was seen and processed
     last_seen_time: Instant,
 
@@ -51,7 +51,7 @@ impl Default for PacketWindowState {
         Self {
             last_seen_time: Instant::now(),
             last_packet_number: 0,
-            ack_number: 0, // NOTE: this assumes packet WAS acknowledged
+            ack_number: 0xFF, // This assumes packet 0 is NOT acknowledged
         }
     }
 }
@@ -66,10 +66,11 @@ impl PacketWindowState {
     /// Examples:
     ///
     /// ```
-    /// let state = PacketWindowState::default(); // starts as 0
-    /// assert_eq!(state.unacknowledged_count(), 0);
+    /// # use ble_discovery::PacketWindowState;
+    /// let state = PacketWindowState::default(); // Starts at 0 packet, unacknowledged
+    /// assert_eq!(state.unacknowledged_count(), 1);
     /// ```
-    fn unacknowledged_count(&self) -> u8 {
+    pub fn unacknowledged_count(&self) -> u8 {
         self.last_packet_number.wrapping_sub(self.ack_number)
     }
 }
