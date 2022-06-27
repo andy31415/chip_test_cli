@@ -12,7 +12,7 @@ use log::{debug, info, warn};
 use tokio::sync::Mutex;
 
 #[cfg(test)]
-use mock_instant::{Instant, MockClock};
+use mock_instant::Instant;
 
 #[cfg(not(test))]
 use std::time::Instant;
@@ -716,8 +716,6 @@ mod test {
             assert!(false);
         }
 
-        /*
-        println!("SERVER:\n  {:?}\n\n", server_state);
         // Server does not need to send anything - internal window still has space
         assert_eq!(
             server_state.prepare_send(crate::PacketData::None).unwrap(),
@@ -726,8 +724,24 @@ mod test {
             }
         );
 
+        let s = client_state
+            .prepare_send(crate::PacketData::HasData)
+            .unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Send(PacketSequenceInfo {
+                sequence_number: 1,
+                ack_number: None,
+            })
+        );
+        if let BtpSendData::Send(s) = s {
+            assert!(server_state.packet_received(s).is_ok());
+        } else {
+            assert!(false);
+        }
+
         let s = server_state.prepare_send(crate::PacketData::None).unwrap();
-        //  expect ACK being sent right away as lonly 2 slots remain in the client window
+        //  expect ACK being sent right away as only 2 slots remain in the client window
         assert_eq!(
             s,
             BtpSendData::Send(PacketSequenceInfo {
@@ -738,6 +752,31 @@ mod test {
 
         if let BtpSendData::Send(s) = s {
             assert!(client_state.packet_received(s).is_ok());
+        } else {
+            assert!(false);
+        }
+
+        // server does not need to send data
+        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Wait {
+                duration: ACKNOWLEDGE_TIMEOUT,
+            }
+        );
+
+        let s = client_state
+            .prepare_send(crate::PacketData::HasData)
+            .unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Send(PacketSequenceInfo {
+                sequence_number: 2,
+                ack_number: Some(1),
+            })
+        );
+        if let BtpSendData::Send(s) = s {
+            assert!(server_state.packet_received(s).is_ok());
         } else {
             assert!(false);
         }
@@ -769,6 +808,5 @@ mod test {
                 ack_number: Some(2)
             })
         );
-        */
     }
 }
