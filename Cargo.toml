@@ -1,5 +1,5 @@
 [package]
-name = "ble_discovery"
+name = "ble_transport_protocol"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,12 +19,14 @@ lalrpop-util = {version="0.19.7", features=["lexer"]}
 regex = "1"
 async-trait = "0.1.56"
 futures = "0.3.21"
+mock_instant = { version = "0.2", features = ["sync"] }
 
 [lib]
-path = "src/ble.rs"
+name = "btp"
 
 [[bin]]
-name = "ble_discovery"
+name = "btp_test_cli"
+path = "src/main.rs"
 
 [build-dependencies]
 lalrpop = "0.19.7"

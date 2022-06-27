@@ -1,5 +1,6 @@
 use ast::Command;
 use bitflags::bitflags;
+use btp::BlePeripheralConnection;
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -14,8 +15,6 @@ use tokio::time;
 
 use lalrpop_util::lalrpop_mod;
 
-use crate::ble::BlePeripheralConnection;
-
 lalrpop_mod!(
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::all))]
     pub cli
@@ -27,8 +26,6 @@ struct VendorId(u16);
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 struct ProductId(u16);
-
-pub mod ble;
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -182,7 +179,7 @@ impl<'a> Shell<'a> {
             }
             let props = props.unwrap();
 
-            let data = match props.service_data.get(&ble::uuids::Services::MATTER) {
+            let data = match props.service_data.get(&btp::uuids::Services::MATTER) {
                 None => {
                     warn!("{:?} Does not look like a matter device.", props.address);
                     continue;
@@ -201,7 +198,7 @@ impl<'a> Shell<'a> {
 
             if !props
                 .service_data
-                .contains_key(&ble::uuids::Services::MATTER)
+                .contains_key(&btp::uuids::Services::MATTER)
             {}
 
             println!(

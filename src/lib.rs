@@ -1,18 +1,25 @@
 use std::pin::Pin;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitflags::bitflags;
 use btleplug::api::Characteristic;
 use btleplug::api::{Peripheral, ValueNotification, WriteType};
+
 use futures::{Stream, StreamExt};
 use log::{debug, info, warn};
 use tokio::sync::Mutex;
 
-/// The maximum amount of time after sending a HandshakeRequest
-/// to wait for a HandshakeResponse before closing a connection.
-const SESSION_HANDSHAKE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+use mock_instant::{Instant, MockClock};
+
+#[cfg(not(test))]
+use std::time::Instant;
+
+// The maximum amount of time after sending a HandshakeRequest
+// to wait for a HandshakeResponse before closing a connection.
+//const SESSION_HANDSHAKE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The maximum amount of time after receipt of a segment before
 /// a stand-alone ack MUST be sent.
@@ -25,7 +32,10 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Represents the state of windowed packets for Btp
 #[derive(Debug, PartialEq)]
 pub struct PacketWindowState {
-    /// Last time a packet was seen and processed
+    /// Last time a packet was seen and processed.
+    ///
+    /// This time represents when last_packet_number was inremented while
+    /// the window was completely open.
     last_seen_time: Instant,
 
     /// Packet number of last seen packet.
@@ -66,12 +76,54 @@ impl PacketWindowState {
     /// Examples:
     ///
     /// ```
-    /// # use ble_discovery::PacketWindowState;
+    /// # use btp::PacketWindowState;
     /// let state = PacketWindowState::default(); // Starts at 0 packet, unacknowledged
     /// assert_eq!(state.unacknowledged_count(), 1);
     /// ```
     pub fn unacknowledged_count(&self) -> u8 {
         self.last_packet_number.wrapping_sub(self.ack_number)
+    }
+
+    // Moves the packet window with one packet forward
+    pub fn next_packet(&mut self) {
+        if self.last_packet_number == self.ack_number {
+            self.last_seen_time = Instant::now();
+        }
+
+        self.last_packet_number = self.last_packet_number.wrapping_add(1);
+    }
+
+    /// Returns the number of the last unacknowledged packet (if any).
+    ///
+    /// Will return None if no packets are unacknowledged.
+    pub fn mark_latest_ack(&mut self) -> Option<u8> {
+        if self.last_packet_number == self.ack_number {
+            return None;
+        }
+
+        // mark that we are acknowledging this packet now
+        self.last_seen_time = Instant::now();
+        Some(self.last_packet_number)
+    }
+
+    /// Acknowledge the given packet number.
+    ///
+    /// Returns a failure if ack_number is out side the current ack number
+    /// and last packet number.
+    pub fn ack_packet(&mut self, ack_number: u8) -> Result<()> {
+        let ack_delta = ack_number.wrapping_sub(self.ack_number);
+        if ack_delta > self.unacknowledged_count() {
+            return Err(anyhow!(
+                "Ack number {} out of range [{}..{}]",
+                ack_number,
+                self.ack_number,
+                self.last_packet_number
+            ));
+        }
+        self.ack_number = ack_number;
+        self.last_seen_time = Instant::now();
+
+        Ok(())
     }
 }
 
@@ -97,13 +149,134 @@ pub struct BtpWindowState {
     received_packets: PacketWindowState,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct PacketSequenceInfo {
+    pub sequence_number: u8,
+    pub ack_number: Option<u8>,
+}
+
+/// Represents the state of sending data using the BTP protocol.
+#[derive(Debug, PartialEq)]
+pub enum BtpSendData {
+    /// Wait before attempting to send. This may occur in the following scenarios:
+    ///   - Remote window is full, no send is possible until a receive
+    ///   - Sending an empty message (just with an ack) is delayed.
+    Wait { duration: Duration },
+    /// The message can be sent with the given sequence number and should contain
+    /// the given ack.
+    Send(PacketSequenceInfo),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PacketData {
+    HasData,
+    None,
+}
+
 impl BtpWindowState {
-    pub fn new(window_size: u8) -> Self {
+    fn new(window_size: u8) -> Self {
         Self {
             window_size,
             sent_packets: PacketWindowState::default(),
             received_packets: PacketWindowState::default(),
         }
+    }
+
+    /// Creates a client window state, initialized as a client-side post
+    /// handshake. In particular this means packet 0 is considered acknowledged
+    pub fn client(window_size: u8) -> Self {
+        let mut result = BtpWindowState::new(window_size);
+        result.sent_packets.ack_packet(0).unwrap();
+
+        result
+    }
+
+    /// Creates a client window state, initialized as a server-side post handshake.
+    /// In particular this means packet 0 is considered not yet acknowledged.
+    pub fn server(window_size: u8) -> Self {
+        BtpWindowState::new(window_size)
+    }
+
+    /// Update the state based on a received packet.
+    ///
+    /// Will return an error if the internal receive state became inconsistent.
+    /// On error, it is expected that the BTP connection is to be terminated.
+    pub fn packet_received(&mut self, packet_data: PacketSequenceInfo) -> Result<()> {
+        self.received_packets.next_packet();
+
+        if self.received_packets.last_packet_number != packet_data.sequence_number {
+            // Packets MUST be monotonically increasing. Error out if they are not
+            return Err(anyhow!(
+                "Received unexpected sequence numbe {}. Expected {}",
+                packet_data.sequence_number,
+                self.received_packets.last_packet_number
+            ));
+        }
+
+        if let Some(ack) = packet_data.ack_number {
+            self.sent_packets.ack_packet(ack)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get send data parameters.
+    ///
+    /// Returns if a send can/should be performed over the given channel.
+    ///
+    /// Depending if data is available or not, sending may decide to wait before
+    /// sending packets over the wire.
+    ///
+    /// If sending is delayed (i.e. 'wait' is being returned), re-send should be
+    /// attempted whenever a new packet is received (since that may open send windows).
+    pub fn prepare_send(&mut self, data: PacketData) -> Result<BtpSendData> {
+        if (self.sent_packets.unacknowledged_count() != 0)
+            && (self.sent_packets.last_seen_time + IDLE_TIMEOUT < Instant::now())
+        {
+            // Expect to receive an ack within the given time window
+            return Err(anyhow!("Timeout receiving data: no ack received in time"));
+        }
+
+        if self.sent_packets.unacknowledged_count() >= self.window_size {
+            // The remote side has no window size for packets, cannot send any data
+            return Ok(BtpSendData::Wait {
+                duration: IDLE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
+            });
+        }
+
+        if (self.received_packets.unacknowledged_count() == 0)
+            && (self.sent_packets.unacknowledged_count() + 1 == self.window_size)
+        {
+            // Cannot send yet: no packates to acknowledge and can only send a single packet
+            // before the remote is fully closed.
+            //
+            // In particular this means we will only send the last packet if it can contain an ack.
+            return Ok(BtpSendData::Wait {
+                duration: IDLE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
+            });
+        }
+
+        if (self.received_packets.unacknowledged_count() + 2 < self.window_size)
+            && (data == PacketData::None)
+        {
+            // If sufficient open window remains and data still can be sent, then delay sending any
+            // ack for now.
+            let time_since_last_sent = Instant::now() - self.sent_packets.last_seen_time;
+
+            if time_since_last_sent < ACKNOWLEDGE_TIMEOUT {
+                return Ok(BtpSendData::Wait {
+                    duration: ACKNOWLEDGE_TIMEOUT - time_since_last_sent,
+                });
+            }
+        }
+
+        // If we get up to here, a packet can be sent
+        self.sent_packets.next_packet();
+
+        Ok(BtpSendData::Send(PacketSequenceInfo {
+            sequence_number: self.sent_packets.last_packet_number,
+            ack_number: self.received_packets.mark_latest_ack(),
+        }))
     }
 }
 
@@ -430,5 +603,83 @@ impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use mock_instant::MockClock;
+
+    use crate::{BtpSendData, BtpWindowState, PacketSequenceInfo, ACKNOWLEDGE_TIMEOUT};
+
+    #[test]
+    fn btp_window_example() {
+        // this example is the Matter example for BTP
+        // interactions for a window size 4
+        let mut client_state = BtpWindowState::client(4);
+        let mut server_state = BtpWindowState::server(4);
+
+        let s = client_state
+            .prepare_send(crate::PacketData::HasData)
+            .unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Send(PacketSequenceInfo {
+                sequence_number: 1,
+                ack_number: Some(0)
+            })
+        );
+
+        if let BtpSendData::Send(s) = s {
+            assert!(server_state.packet_received(s).is_ok());
+        } else {
+            assert!(false);
+        }
+
+        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
+        //  expect ACK being sent right away as lonly 2 slots remain in the client window
+        assert_eq!(
+            s,
+            BtpSendData::Send(PacketSequenceInfo {
+                sequence_number: 1,
+                ack_number: Some(1)
+            })
+        );
+
+        if let BtpSendData::Send(s) = s {
+            assert!(client_state.packet_received(s).is_ok());
+        } else {
+            assert!(false);
+        }
+
+        // server does not need to send data
+        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Wait {
+                duration: ACKNOWLEDGE_TIMEOUT,
+            }
+        );
+
+        MockClock::advance(Duration::from_secs(1));
+
+        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Wait {
+                duration: ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1),
+            }
+        );
+        MockClock::advance(ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1));
+        let s = server_state.prepare_send(crate::PacketData::None).unwrap();
+        assert_eq!(
+            s,
+            BtpSendData::Send(PacketSequenceInfo {
+                sequence_number: 2,
+                ack_number: Some(2)
+            })
+        );
     }
 }

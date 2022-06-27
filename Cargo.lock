@@ -76,7 +76,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "ble_discovery"
+name = "ble_transport_protocol"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -89,6 +89,7 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "log",
+ "mock_instant",
  "pretty_env_logger",
  "regex",
  "tokio",
@@ -653,6 +654,15 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "mock_instant"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "717e29a243b81f8130e31e24e04fb151b04a44b5a7d05370935f7d937e9de06d"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]
