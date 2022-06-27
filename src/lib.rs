@@ -696,7 +696,6 @@ mod test {
     fn btp_window_example() {
         // this example is the Matter example for BTP
         // interactions for a window size 4
-        /*
         let mut client_state = BtpWindowState::client(4);
         let mut server_state = BtpWindowState::server(4);
 
@@ -717,6 +716,7 @@ mod test {
             assert!(false);
         }
 
+        /*
         println!("SERVER:\n  {:?}\n\n", server_state);
         // Server does not need to send anything - internal window still has space
         assert_eq!(
