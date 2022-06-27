@@ -801,6 +801,12 @@ mod test {
             PacketData::None,
             ACKNOWLEDGE_TIMEOUT,
         );
+        pipe.expect_wait_send(
+            SendDirection::ClientToServer,
+            PacketData::None,
+            ACKNOWLEDGE_TIMEOUT,
+        );
+
         pipe.expect_send(
             SendDirection::ClientToServer,
             PacketData::HasData,
