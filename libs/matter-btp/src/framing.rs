@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use bitflags::bitflags;
 use std::time::Duration;
 
 #[cfg(test)]
@@ -6,6 +7,30 @@ use mock_instant::Instant;
 
 #[cfg(not(test))]
 use std::time::Instant;
+
+bitflags! {
+    /// Represents flags within a BTP header structure
+    pub struct HeaderFlags: u8 {
+       const SEGMENT_BEGIN = 0b_0000_0001;
+       const SEGMENT_END = 0b_0000_0100;
+       const CONTAINS_ACK = 0b_0000_1000;
+       const MANAGEMENT_MESSAGE = 0b_0010_0000;
+       const HANDSHAKE_MESSAGE = 0b_0100_0000;
+
+
+       const HANDSHAKE_REQUEST =
+          Self::HANDSHAKE_MESSAGE.bits |
+          Self::MANAGEMENT_MESSAGE.bits |
+          Self::SEGMENT_BEGIN.bits |
+          Self::SEGMENT_END.bits;
+
+       const HANDSHAKE_RESPONSE =
+          Self::HANDSHAKE_MESSAGE.bits |
+          Self::MANAGEMENT_MESSAGE.bits |
+          Self::SEGMENT_BEGIN.bits |
+          Self::SEGMENT_END.bits;
+    }
+}
 
 // The maximum amount of time after sending a HandshakeRequest
 // to wait for a HandshakeResponse before closing a connection.
