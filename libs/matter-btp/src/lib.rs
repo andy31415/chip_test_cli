@@ -17,6 +17,8 @@ use mock_instant::Instant;
 #[cfg(not(test))]
 use std::time::Instant;
 
+pub mod advertising_data;
+
 // The maximum amount of time after sending a HandshakeRequest
 // to wait for a HandshakeResponse before closing a connection.
 //const SESSION_HANDSHAKE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);

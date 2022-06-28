@@ -619,6 +619,7 @@ dependencies = [
  "async-trait",
  "bitflags",
  "btleplug",
+ "byteorder",
  "futures",
  "log",
  "mock_instant",
