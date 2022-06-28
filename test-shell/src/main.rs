@@ -91,7 +91,7 @@ impl<'a> Shell<'a> {
             }
             let props = props.unwrap();
 
-            let data = match props.service_data.get(&matter_btp::uuids::Services::MATTER) {
+            let data = match props.service_data.get(&matter_btp::uuids::services::MATTER) {
                 None => {
                     warn!("{:?} Does not look like a matter device.", props.address);
                     continue;
@@ -110,7 +110,7 @@ impl<'a> Shell<'a> {
 
             if !props
                 .service_data
-                .contains_key(&matter_btp::uuids::Services::MATTER)
+                .contains_key(&matter_btp::uuids::services::MATTER)
             {}
 
             println!(

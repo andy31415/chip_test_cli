@@ -361,20 +361,17 @@ impl BtpWindowState {
 }
 
 pub mod uuids {
-
-    use uuid::Uuid;
-    pub struct Services;
-    pub struct Characteristics;
-
-    impl Services {
-        pub const MATTER: Uuid = Uuid::from_u128(0x0000FFF6_0000_1000_8000_00805F9B34FB);
-    }
-
-    impl Characteristics {
+    pub mod characteristics {
+        use uuid::Uuid;
         pub const WRITE: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D11);
         pub const READ: Uuid = Uuid::from_u128(0x18EE2EF5_263D_4559_959F_4F9C429F9D12);
         pub const COMMISSIONING_DATA: Uuid =
             Uuid::from_u128(0x64630238_8772_45F2_B87D_748A83218F04);
+    }
+
+    pub mod services {
+        use uuid::Uuid;
+        pub const MATTER: Uuid = Uuid::from_u128(0x0000FFF6_0000_1000_8000_00805F9B34FB);
     }
 }
 
@@ -554,7 +551,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         let mut read_characteristic = None;
 
         for service in peripheral.services() {
-            if service.uuid != uuids::Services::MATTER {
+            if service.uuid != uuids::services::MATTER {
                 continue;
             }
 
@@ -563,15 +560,15 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
             for characteristic in service.characteristics {
                 info!("   Characteristic: {:?}", characteristic);
                 match characteristic.uuid {
-                    uuids::Characteristics::READ => {
+                    uuids::characteristics::READ => {
                         info!("      !! detected READ characteristic.");
                         read_characteristic = Some(characteristic);
                     }
-                    uuids::Characteristics::WRITE => {
+                    uuids::characteristics::WRITE => {
                         info!("      !! detected WRITE characteristic.");
                         write_characteristic = Some(characteristic);
                     }
-                    uuids::Characteristics::COMMISSIONING_DATA => {
+                    uuids::characteristics::COMMISSIONING_DATA => {
                         info!("      !! detected Commission data characteristic.");
                     }
                     _ => {
@@ -675,7 +672,7 @@ impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
             match value {
                 None => return Err(anyhow!("No more data")),
                 Some(ValueNotification {
-                    uuid: uuids::Characteristics::READ,
+                    uuid: uuids::characteristics::READ,
                     value,
                 }) => return Ok(value),
                 Some(other_value) => {
