@@ -1,6 +1,6 @@
 use crate::framing::HeaderFlags;
 use anyhow::{anyhow, Result};
-use byteorder::{LittleEndian, ByteOrder};
+use byteorder::{ByteOrder, LittleEndian};
 
 // a nibble really
 const BTP_PROTOCOL_VERSION: u8 = 0x04;
@@ -21,14 +21,14 @@ pub struct ResizableMessageBuffer {
 impl ResizableMessageBuffer {
     /// Sets a u8 value at a specific index. Resizes the undelying
     /// buffer if needed.
-    /// 
+    ///
     /// Example:
-    /// 
+    ///
     /// ```
     /// use matter_btp::handshake::{ResizableMessageBuffer, BtpBuffer};
-    /// 
+    ///
     /// let mut buffer = ResizableMessageBuffer::default();
-    /// 
+    ///
     /// assert_eq!(buffer.buffer(), &[]);
     ///
     /// buffer.set_u8(0, 3);
@@ -51,16 +51,16 @@ impl ResizableMessageBuffer {
         self.data[index] = value;
     }
 
-    /// Sets a 16-bit value in little endian format at a specific index. 
+    /// Sets a 16-bit value in little endian format at a specific index.
     /// Resizes the undelying buffer if needed.
-    /// 
+    ///
     /// Example:
-    /// 
+    ///
     /// ```
     /// use matter_btp::handshake::{ResizableMessageBuffer, BtpBuffer};
-    /// 
+    ///
     /// let mut buffer = ResizableMessageBuffer::default();
-    /// 
+    ///
     /// assert_eq!(buffer.buffer(), &[]);
     ///
     /// buffer.set_u8(0, 3);
@@ -93,24 +93,21 @@ impl BtpBuffer for ResizableMessageBuffer {
 // Represents a handshake request
 #[derive(Clone, Debug)]
 pub struct Request {
-    buffer: [u8;9],
+    buffer: [u8; 9],
 }
 
 impl Default for Request {
     fn default() -> Self {
-        let mut request = Self {
-            buffer: Default::default(),
-        };
-        
-        request.buffer[0] = HeaderFlags::HANDSHAKE_REQUEST.bits();
-        request.buffer[1] = MANAGEMENT_OPCODE;
-        request.buffer[2] = BTP_PROTOCOL_VERSION; // only lower nibble required
-
-        // now set some maybe valid minimal sizes
-        request.set_window_size(8);
-        request.set_segment_size(20);
-
-        request
+        Self {
+            #[rustfmt::skip]
+            buffer: [
+                HeaderFlags::HANDSHAKE_REQUEST.bits(),
+                MANAGEMENT_OPCODE,             
+                BTP_PROTOCOL_VERSION, 0, 0, 0, // No other versions
+                20, 0,                         // minimal segment size
+                4,                             // small window size
+            ],
+        }
     }
 }
 
@@ -126,17 +123,17 @@ impl Request {
 
 impl BtpBuffer for Request {
     /// Gets the underlying buffer value after a Request is set up
-    /// 
+    ///
     /// Example:
     ///
     /// ```
     /// use matter_btp::handshake::{Request, BtpBuffer};
-    /// 
+    ///
     /// let mut request = Request::default();
-    /// 
+    ///
     /// request.set_window_size(21);
     /// request.set_segment_size(1234);
-    /// 
+    ///
     /// assert_eq!(
     ///     request.buffer(),
     ///     &[
@@ -170,7 +167,7 @@ impl Response {
     ///
     /// assert!(Response::parse(&[]).is_err());
     /// assert!(Response::parse(&[0]).is_err());
-    /// 
+    ///
     /// assert_eq!(
     ///     Response::parse(&[
     ///        0x65,                   // H,M,E,B are all set
