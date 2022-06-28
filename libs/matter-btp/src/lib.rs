@@ -76,7 +76,7 @@ impl PacketWindowState {
     /// Examples:
     ///
     /// ```
-    /// # use btp::PacketWindowState;
+    /// # use matter_btp::PacketWindowState;
     /// let mut state = PacketWindowState::default(); // Starts at 0 packet, unacknowledged
     /// assert_eq!(state.unacknowledged_count(), 0);
     ///
@@ -197,7 +197,7 @@ impl BtpWindowState {
     ///    - the first data packet includes the ack for the connect response
     ///
     /// ```
-    /// # use btp::*;
+    /// # use matter_btp::*;
     ///
     /// let mut state= BtpWindowState::client(4);
     ///
@@ -228,7 +228,7 @@ impl BtpWindowState {
     /// Examples:
     ///
     /// ```
-    /// # use btp::*;
+    /// # use matter_btp::*;
     ///
     /// let mut state= BtpWindowState::server(4);
     ///
@@ -245,7 +245,7 @@ impl BtpWindowState {
     /// ```
     ///
     /// ```
-    /// # use btp::*;
+    /// # use matter_btp::*;
     ///
     /// let mut state= BtpWindowState::server(4);
     ///
