@@ -131,6 +131,17 @@ impl BtpBuffer for Request {
     ///
     /// let mut request = Request::default();
     ///
+    /// assert_eq!(
+    ///     request.buffer(),
+    ///     &[
+    ///        0x65,                   // H,M,E,B are all set
+    ///        0x6C,                   // Management opcode
+    ///        0x04, 0x00, 0x00, 0x00, // version 4 in low bits, 0 in the rest of version choices
+    ///        20, 0,                  // segment size
+    ///        4                       // window size
+    ///     ]
+    /// );
+    ///
     /// request.set_window_size(21);
     /// request.set_segment_size(1234);
     ///
