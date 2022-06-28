@@ -19,8 +19,7 @@ lalrpop-util = {version="0.19.7", features=["lexer"]}
 regex = "1"
 async-trait = "0.1.56"
 futures = "0.3.21"
-mock_instant = { version="0.2", features=["sync"] }
-matter-btp = {versio="*", path="../libs/matter-btp"}
+matter-btp = {path="../libs/matter-btp"}
 
 [build-dependencies]
 lalrpop = "0.19.7"
