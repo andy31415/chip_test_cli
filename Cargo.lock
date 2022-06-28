@@ -1000,7 +1000,6 @@ dependencies = [
  "async-trait",
  "bitflags",
  "btleplug",
- "byteorder",
  "dialoguer",
  "futures",
  "lalrpop",
