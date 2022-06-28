@@ -235,7 +235,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         }
     }
 
-    async fn start_send_receive_loops(&mut self) -> Result<()> {
+    async fn start_send_receive_loops(&mut self, btp_window_state: BtpWindowState) -> Result<()> {
         let (send_tx, send_rx) = unbounded_channel();
         self.send_queue_tx
             .lock()
@@ -253,6 +253,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         let mut processor = BtpProcessorBuilder::default()
             .send_rx(send_rx)
             .recv_tx(recv_tx)
+            .btp(btp_window_state)
             //.reader(self.reader.take().unwrap())
             //.writer(self.writer.clone())
             .build()?;
@@ -279,9 +280,11 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         reader.start().await?;
 
         let response = BtpHandshakeResponse::parse(reader.raw_read().await?.as_slice())?;
+        
+        // TODO: also use response.selected_segment_size
+        let state = BtpWindowState::client(response.selected_window_size);
 
-        self.start_send_receive_loops().await?;
-        // TODO: spawn send/receive thread
+        self.start_send_receive_loops(state).await?;
 
         Ok(response)
     }
