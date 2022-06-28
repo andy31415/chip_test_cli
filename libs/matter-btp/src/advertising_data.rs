@@ -23,7 +23,6 @@ impl Debug for VendorId {
 
 bitflags! {
     pub struct ComissionableFlags: u8 {
-        const NONE = 0x00;
         const ADDITIONAL_DATA = 0x01;
     }
 }
@@ -64,7 +63,7 @@ impl Commissionable {
     ///      discriminator: Discriminator(1234),
     ///      vendor_id: None,
     ///      product_id: None,
-    ///      flags: ComissionableFlags::NONE,
+    ///      flags: ComissionableFlags::empty(),
     ///   }
     /// );
     ///
