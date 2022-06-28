@@ -102,7 +102,7 @@ impl Default for Request {
             #[rustfmt::skip]
             buffer: [
                 HeaderFlags::HANDSHAKE_REQUEST.bits(),
-                MANAGEMENT_OPCODE,             
+                MANAGEMENT_OPCODE,
                 BTP_PROTOCOL_VERSION, 0, 0, 0, // No other versions
                 20, 0,                         // minimal segment size
                 4,                             // small window size

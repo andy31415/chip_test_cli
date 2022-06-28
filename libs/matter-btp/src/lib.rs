@@ -106,23 +106,18 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         }
     }
 
-    pub async fn handshake(&mut self) -> Result<()> {
+    pub async fn handshake(&mut self) -> Result<BtpHandshakeResponse> {
         let mut request = BtpHandshakeRequest::default();
         request.set_segment_size(247); // no idea. Could be something else
         request.set_window_size(6); // no idea either
 
         self.raw_write(request).await?;
 
+        // Subscription must be done only after the request raw write
         info!("Subscribing to {:?} ...", self.read_characteristic);
         self.peripheral.subscribe(&self.read_characteristic).await?;
 
-        println!("Reading ...");
-
-        let response = BtpHandshakeResponse::parse(self.read().await?.as_slice())?;
-
-        println!("Handshake response: {:?}", response);
-
-        Ok(())
+        Ok(BtpHandshakeResponse::parse(self.read().await?.as_slice())?)
     }
 
     async fn raw_write<B: BtpBuffer>(&self, buffer: B) -> Result<()> {

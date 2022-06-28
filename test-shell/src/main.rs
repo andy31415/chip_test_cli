@@ -160,7 +160,9 @@ impl<'a> Shell<'a> {
 
         let mut conn = BlePeripheralConnection::new(peripheral).await?;
 
-        conn.handshake().await?;
+        let response = conn.handshake().await?;
+
+        println!("Handshake response: {:?}", response);
 
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
