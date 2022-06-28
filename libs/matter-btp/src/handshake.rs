@@ -1,5 +1,6 @@
 use crate::framing::HeaderFlags;
 use anyhow::{anyhow, Result};
+use byteorder::{LittleEndian, ByteOrder};
 
 // a nibble really
 const BTP_PROTOCOL_VERSION: u8 = 0x04;
@@ -92,7 +93,7 @@ impl BtpBuffer for ResizableMessageBuffer {
 // Represents a handshake request
 #[derive(Clone, Debug)]
 pub struct Request {
-    buffer: ResizableMessageBuffer,
+    buffer: [u8;9],
 }
 
 impl Default for Request {
@@ -100,19 +101,11 @@ impl Default for Request {
         let mut request = Self {
             buffer: Default::default(),
         };
-
-        request
-            .buffer
-            .set_u8(0, HeaderFlags::HANDSHAKE_REQUEST.bits());
-        request.buffer.set_u8(1, MANAGEMENT_OPCODE);
-
-        // Only one protocol supported, so no array of versions here, just one
-        // Note that the LOW NIBBLE is the important one
-        request.buffer.set_u8(2, BTP_PROTOCOL_VERSION);
-
-        // sets the client window size to 0, to force internal buffer resizing
-        request.buffer.set_u8(8, 0);
         
+        request.buffer[0] = HeaderFlags::HANDSHAKE_REQUEST.bits();
+        request.buffer[1] = MANAGEMENT_OPCODE;
+        request.buffer[2] = BTP_PROTOCOL_VERSION; // only lower nibble required
+
         // now set some maybe valid minimal sizes
         request.set_window_size(8);
         request.set_segment_size(20);
@@ -123,11 +116,11 @@ impl Default for Request {
 
 impl Request {
     pub fn set_segment_size(&mut self, size: u16) {
-        self.buffer.set_u16(6, size);
+        LittleEndian::write_u16(&mut self.buffer[6..8], size);
     }
 
     pub fn set_window_size(&mut self, size: u8) {
-        self.buffer.set_u8(8, size);
+        self.buffer[8] = size;
     }
 }
 
@@ -156,7 +149,7 @@ impl BtpBuffer for Request {
     /// );
     /// ```
     fn buffer(&self) -> &[u8] {
-        self.buffer.buffer()
+        self.buffer.as_slice()
     }
 }
 
