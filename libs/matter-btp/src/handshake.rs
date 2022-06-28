@@ -50,6 +50,30 @@ impl ResizableMessageBuffer {
         self.data[index] = value;
     }
 
+    /// Sets a 16-bit value in little endian format at a specific index. 
+    /// Resizes the undelying buffer if needed.
+    /// 
+    /// Example:
+    /// 
+    /// ```
+    /// use matter_btp::handshake::{ResizableMessageBuffer, BtpBuffer};
+    /// 
+    /// let mut buffer = ResizableMessageBuffer::default();
+    /// 
+    /// assert_eq!(buffer.buffer(), &[]);
+    ///
+    /// buffer.set_u8(0, 3);
+    /// assert_eq!(buffer.buffer(), &[3]);
+    ///
+    /// buffer.set_u16(0, 10);
+    /// assert_eq!(buffer.buffer(), &[10, 0]);
+    ///
+    /// buffer.set_u16(1, 0x1234);
+    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12]);
+    ///
+    /// buffer.set_u16(5, 0x6655);
+    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12, 0, 0, 0x55, 0x66]);
+    /// ```
     pub fn set_u16(&mut self, index: usize, value: u16) {
         let h = ((value >> 8) & 0xFF) as u8;
         let l = (value & 0xFF) as u8;
