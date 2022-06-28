@@ -45,7 +45,7 @@ const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Represents the state of windowed packets for Btp
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PacketWindowState {
     /// Last time a packet was seen and processed.
     ///
@@ -154,7 +154,7 @@ impl PacketWindowState {
 ///
 /// BTP connections are managing packets to/from a remote
 /// side, while considering open window sizes on each side.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BtpWindowState {
     /// The negociated window size. This is how many packets
     /// could be in flight without confirmation. The implementation

@@ -163,6 +163,12 @@ impl<'a> Shell<'a> {
         let response = conn.handshake().await?;
 
         println!("Handshake response: {:?}", response);
+        
+        // TODO:
+        //   - setup a BTP window for the given parameters
+        //   - setup frame bits
+        //   - start a send/receive loop (need streams and send/receive queue)
+        //   - communicate via channels.
 
         // TODO: try to receive some data
         //   - unpack CHIPoBLE framing
