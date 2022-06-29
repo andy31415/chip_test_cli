@@ -83,30 +83,6 @@ impl<P: Peripheral> CharacteristicReader<P> {
             .filter(|n| n.uuid == uuids::characteristics::READ)
             .map(|n| n.value))
     }
-
-    /*
-    pub async fn raw_read(&mut self) -> Result<Vec<u8>> {
-        loop {
-            let value = {
-                let mut guard = self.notifications.lock().await;
-                match guard.as_mut() {
-                    None => return Err(anyhow!("Reading not yet started")),
-                    Some(stream) => stream.next().await,
-                }
-            };
-            match value {
-                None => return Err(anyhow!("No more data")),
-                Some(ValueNotification {
-                    uuid: uuids::characteristics::READ,
-                    value,
-                }) => return Ok(value),
-                Some(other_value) => {
-                    warn!("Unexpected notification: {:?}", other_value);
-                }
-            }
-        }
-    }
-    */
 }
 
 pub struct BlePeripheralConnection<P: Peripheral> {
@@ -117,13 +93,19 @@ pub struct BlePeripheralConnection<P: Peripheral> {
 /// Represents an open BTP connection.
 #[derive(Builder)]
 #[builder(pattern = "owned")]
-struct BtpCommunicator<P: Peripheral> {
-    reader: CharacteristicReader<P>,
+struct BtpCommunicator<P, InputPackets>
+where 
+  P: Peripheral,
+  InputPackets: tokio_stream::Stream<Item = Vec<u8>> + Send
+{
     writer: CharacteristicWriter<P>,
+    received_packets: InputPackets,
     state: BtpWindowState,
 }
 
-impl<P: Peripheral> BtpCommunicator<P> {
+impl<P: Peripheral, I> BtpCommunicator<P, I>
+where I: tokio_stream::Stream<Item = Vec<u8>> + Send
+{
     /// Operate interal send/receive loops:
     ///   - handles keep-alive back and forth
     ///   - sends if sending queue is non-empty
@@ -145,7 +127,9 @@ impl<P: Peripheral> BtpCommunicator<P> {
 }
 
 #[async_trait]
-impl<P: Peripheral> AsyncConnection for BtpCommunicator<P> {
+impl<P: Peripheral, I> AsyncConnection for BtpCommunicator<P, I>
+where I: tokio_stream::Stream<Item = Vec<u8>> + Send
+{
     async fn write(&mut self, data: &[u8]) -> Result<()> {
         todo!();
     }
@@ -253,7 +237,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
         Ok(BtpCommunicatorBuilder::default()
             .state(BtpWindowState::client(response.selected_window_size))
-            .reader(self.reader.take().unwrap())
+            .received_packets(packets)
             .writer(self.writer.clone())
             .build()?)
     }
