@@ -80,8 +80,12 @@ impl<P: Peripheral> CharacteristicReader<P> {
         let notif = self.peripheral.notifications().await?;
 
         Ok(notif
-            .filter(|n| n.uuid == uuids::characteristics::READ)
-            .map(|n| n.value))
+            .filter_map(|n| 
+                match n.uuid {
+                    uuids::characteristics::READ => Some(n.value),
+                    _ => None,
+                }
+            ))
     }
 }
 
