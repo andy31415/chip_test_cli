@@ -74,9 +74,12 @@ impl<P: Peripheral> CharacteristicReader<P> {
 
     pub async fn start(self) -> Result<impl tokio_stream::Stream<Item = Vec<u8>>> {
         info!("Subscribing to {:?} ...", self.characteristic);
-        self.peripheral.subscribe(&self.characteristic).await?;
 
         let notif = self.peripheral.notifications().await?;
+
+        // NOTE: it is important to aquire the notification stream BEFORE we subscribe, so
+        //       that packets are not lost in transit.
+        self.peripheral.subscribe(&self.characteristic).await?;
 
         Ok(notif.filter_map(|n| match n.uuid {
             uuids::characteristics::READ => Some(n.value),
