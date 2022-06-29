@@ -161,6 +161,11 @@ impl MessageData {
     /// ```
     /// use matter_packets::*;
     ///
+    /// // invalid messages are rejected
+    /// assert!(MessageData::parse(&[]).is_err()); // too short
+    /// assert!(MessageData::parse(&[0, 0, 0]).is_err()); // too short
+    /// assert!(MessageData::parse(&[0x11, 0, 0, 0, 0, 0, 0, 0]).is_err()); // invalid version
+    ///
     /// let data = MessageData::parse(&[
     ///   0x00,                   // flags: none set
     ///   0x34, 0x12,             // session id: 0x1234
