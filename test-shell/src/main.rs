@@ -160,7 +160,7 @@ impl<'a> Shell<'a> {
 
         let mut conn = BlePeripheralConnection::new(peripheral).await?;
 
-        // TODO: 
+        // TODO:
         //   - use connection for PASE
         //   - use connection for cluster operations
         //   - start implementing CHIP framing after that!

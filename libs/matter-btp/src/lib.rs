@@ -79,13 +79,10 @@ impl<P: Peripheral> CharacteristicReader<P> {
 
         let notif = self.peripheral.notifications().await?;
 
-        Ok(notif
-            .filter_map(|n| 
-                match n.uuid {
-                    uuids::characteristics::READ => Some(n.value),
-                    _ => None,
-                }
-            ))
+        Ok(notif.filter_map(|n| match n.uuid {
+            uuids::characteristics::READ => Some(n.value),
+            _ => None,
+        }))
     }
 }
 
@@ -98,9 +95,9 @@ pub struct BlePeripheralConnection<P: Peripheral> {
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 struct BtpCommunicator<P, InputPackets>
-where 
-  P: Peripheral,
-  InputPackets: tokio_stream::Stream<Item = Vec<u8>> + Send
+where
+    P: Peripheral,
+    InputPackets: tokio_stream::Stream<Item = Vec<u8>> + Send,
 {
     writer: CharacteristicWriter<P>,
     received_packets: InputPackets,
@@ -108,7 +105,8 @@ where
 }
 
 impl<P: Peripheral, I> BtpCommunicator<P, I>
-where I: tokio_stream::Stream<Item = Vec<u8>> + Send
+where
+    I: tokio_stream::Stream<Item = Vec<u8>> + Send,
 {
     /// Operate interal send/receive loops:
     ///   - handles keep-alive back and forth
@@ -132,7 +130,8 @@ where I: tokio_stream::Stream<Item = Vec<u8>> + Send
 
 #[async_trait]
 impl<P: Peripheral, I> AsyncConnection for BtpCommunicator<P, I>
-where I: tokio_stream::Stream<Item = Vec<u8>> + Send
+where
+    I: tokio_stream::Stream<Item = Vec<u8>> + Send,
 {
     async fn write(&mut self, data: &[u8]) -> Result<()> {
         todo!();
