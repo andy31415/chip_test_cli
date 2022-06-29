@@ -40,10 +40,57 @@ pub struct BtpDataPacket<'a> {
 }
 
 impl<'a> BtpDataPacket<'a> {
+    /// Parses a given buffer and interprets it as a data packet
+    ///
+    /// will NOT accept management messages.
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// use matter_btp::framing::{BtpDataPacket, HeaderFlags, PacketSequenceInfo};
+    ///
+    ///
+    /// // short messages are rejected
+    /// assert!(BtpDataPacket::parse(&[]).is_err());
+    /// assert!(BtpDataPacket::parse(&[0]).is_err());
+    /// assert!(BtpDataPacket::parse(&[8, 0]).is_err());
+    ///
+    /// // handshake and management messages are rejected
+    /// assert!(BtpDataPacket::parse(&[0x20, 0, 0 ,0]).is_err());
+    /// assert!(BtpDataPacket::parse(&[0x40, 0, 0 ,0]).is_err());
+    /// assert!(BtpDataPacket::parse(&[0x60, 0, 0 ,0]).is_err());
+    ///
+    /// let packet = BtpDataPacket::parse(&[8, 0, 2]).unwrap();
+    /// assert_eq!(packet.flags, HeaderFlags::CONTAINS_ACK);
+    /// assert_eq!(
+    ///     packet.sequence_info,
+    ///     PacketSequenceInfo{
+    ///        ack_number: Some(0),
+    ///        sequence_number: 2,
+    ///     }
+    /// );
+    ///
+    /// let packet = BtpDataPacket::parse(&[0, 0, 1]).unwrap();
+    /// assert_eq!(packet.flags, HeaderFlags::empty());
+    /// assert_eq!(
+    ///     packet.sequence_info,
+    ///     PacketSequenceInfo{
+    ///        ack_number: None,
+    ///        sequence_number: 0,
+    ///     }
+    /// );
+    /// assert_eq!(packet.payload, &[1]);
+    /// ```
     pub fn parse(buffer: &'a [u8]) -> Result<BtpDataPacket<'a>> {
         match buffer {
             [flags, rest @ ..] => {
                 let flags = HeaderFlags::from_bits(*flags).ok_or(anyhow!("Invalid flags"))?;
+
+                if flags
+                    .intersects(HeaderFlags::MANAGEMENT_MESSAGE | HeaderFlags::HANDSHAKE_MESSAGE)
+                {
+                    return Err(anyhow!("Parsing of management packets not supported."));
+                }
 
                 match rest {
                     [ack_number, sequence_number, payload @ ..]
