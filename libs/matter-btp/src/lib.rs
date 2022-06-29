@@ -272,11 +272,13 @@ where
     I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
     async fn write(&mut self, data: &[u8]) -> Result<()> {
+        info!("Writing data: {:?}", data);
         self.send_queue.push_back(PendingData::new(data.into()));
 
         while !self.send_queue.is_empty() {
             self.drive_io().await?;
         }
+        info!("Writing data complete");
         Ok(())
     }
 

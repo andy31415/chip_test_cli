@@ -164,6 +164,9 @@ impl<'a> Shell<'a> {
             .await?;
 
         // TODO: actually need to send PASE
+        println!("Sending fake data....");
+        conn.write(&[1,2,3,4,5,6]).await?;
+
         let data = conn.read().await?;
         println!("DATA RECEIVED: {:?}", data);
 
