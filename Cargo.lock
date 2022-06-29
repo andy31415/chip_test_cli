@@ -703,6 +703,7 @@ dependencies = [
  "log",
  "mock_instant",
  "tokio",
+ "tokio-stream",
  "uuid",
 ]
 

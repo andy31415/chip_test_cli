@@ -1,21 +1,16 @@
 #![feature(async_closure)]
 
 use derive_builder::Builder;
-use std::cell::RefCell;
-use std::pin::Pin;
-use uuids::characteristics;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 
 use btleplug::api::Characteristic;
-use btleplug::api::{Peripheral, ValueNotification, WriteType};
+use btleplug::api::{Peripheral, WriteType};
 
 use framing::BtpWindowState;
-use futures::{Stream, StreamExt};
-use log::{debug, info, warn};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::Mutex;
+use log::{debug, info};
+use tokio_stream::StreamExt;
 
 pub mod advertising_data;
 pub mod framing;
@@ -68,7 +63,6 @@ impl<P: Peripheral> CharacteristicWriter<P> {
 struct CharacteristicReader<P: Peripheral> {
     peripheral: P,
     characteristic: Characteristic,
-    notifications: Mutex<Option<Pin<Box<dyn Stream<Item = ValueNotification> + Send>>>>,
 }
 
 impl<P: Peripheral> CharacteristicReader<P> {
@@ -76,25 +70,21 @@ impl<P: Peripheral> CharacteristicReader<P> {
         Self {
             peripheral,
             characteristic,
-            notifications: Mutex::new(None),
         }
     }
 
-    pub async fn start(&mut self) -> Result<()> {
-        let mut guard = self.notifications.lock().await;
-
-        if guard.is_some() {
-            return Err(anyhow!("reader is already started"));
-        }
-
-        guard.replace(self.peripheral.notifications().await?);
-
+    pub async fn start(self) -> Result<impl tokio_stream::Stream<Item = Vec<u8>>> {
         info!("Subscribing to {:?} ...", self.characteristic);
         self.peripheral.subscribe(&self.characteristic).await?;
 
-        Ok(())
+        let notif = self.peripheral.notifications().await?;
+
+        Ok(notif
+            .filter(|n| n.uuid == uuids::characteristics::READ)
+            .map(|n| n.value))
     }
 
+    /*
     pub async fn raw_read(&mut self) -> Result<Vec<u8>> {
         loop {
             let value = {
@@ -116,6 +106,7 @@ impl<P: Peripheral> CharacteristicReader<P> {
             }
         }
     }
+    */
 }
 
 pub struct BlePeripheralConnection<P: Peripheral> {
@@ -123,7 +114,7 @@ pub struct BlePeripheralConnection<P: Peripheral> {
     reader: Option<CharacteristicReader<P>>,
 }
 
-/// Represents an open BTP connection
+/// Represents an open BTP connection.
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 struct BtpCommunicator<P: Peripheral> {
@@ -132,20 +123,29 @@ struct BtpCommunicator<P: Peripheral> {
     state: BtpWindowState,
 }
 
-
 impl<P: Peripheral> BtpCommunicator<P> {
     /// Operate interal send/receive loops:
     ///   - handles keep-alive back and forth
     ///   - sends if sending queue is non-empty
     ///   - receives if any data is sent by the remote side
     async fn drive_io(&mut self) {
+        // - cases:
+        //    - determine what to write (if anything)
+        //    - ask state to perform read or write
+        //    - select on either read or write
+        //    - Need: i/o in a loop (reading loop? stream of values for read data?)
+
+        // TODO: select reader and writer
+        //  - for writing:
+        //    - figure out if anything to send (state decides)
+        //    - have some form of timeout
+
         todo!()
     }
 }
 
 #[async_trait]
 impl<P: Peripheral> AsyncConnection for BtpCommunicator<P> {
-
     async fn write(&mut self, data: &[u8]) -> Result<()> {
         todo!();
     }
@@ -233,22 +233,28 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         self.writer.raw_write(request).await?;
 
         // Subscription must be done only after the request raw write
-        let reader = self.reader.as_mut().ok_or(anyhow!(
+        let reader = self.reader.take().ok_or(anyhow!(
             "Reader not available (alredy cleared by another handshake?"
         ))?;
-        reader.start().await?;
 
-        let response = BtpHandshakeResponse::parse(reader.raw_read().await?.as_slice())?;
-        
+        let mut packets = reader.start().await?;
+
+        let response = BtpHandshakeResponse::parse(
+            packets
+                .next()
+                .await
+                .ok_or(anyhow!("No handshake response"))?
+                .as_slice(),
+        )?;
+
         println!("Handshake response: {:?}", response);
-        
+
         // TODO: also use response.selected_segment_size
 
         Ok(BtpCommunicatorBuilder::default()
             .state(BtpWindowState::client(response.selected_window_size))
             .reader(self.reader.take().unwrap())
             .writer(self.writer.clone())
-            .build()?
-        )
+            .build()?)
     }
 }
