@@ -28,7 +28,7 @@ use crate::handshake::{
 
 #[async_trait]
 pub trait AsyncConnection {
-    async fn write(&self, data: &[u8]) -> Result<()>;
+    async fn write(&mut self, data: &[u8]) -> Result<()>;
     async fn read(&mut self) -> Result<Vec<u8>>;
 }
 
@@ -121,45 +121,37 @@ impl<P: Peripheral> CharacteristicReader<P> {
 pub struct BlePeripheralConnection<P: Peripheral> {
     writer: CharacteristicWriter<P>,
     reader: Option<CharacteristicReader<P>>,
-
-    // A queue of data to be sent over the wire?
-    send_queue_tx: Mutex<RefCell<Option<UnboundedSender<Vec<u8>>>>>,
-    receive_queue_rx: Mutex<RefCell<Option<UnboundedReceiver<Vec<u8>>>>>,
 }
 
+/// Represents an open BTP connection
 #[derive(Builder)]
 #[builder(pattern = "owned")]
-struct BtpProcessor {
-    /// Items received for sending. are NOT yet framed
-    send_rx: UnboundedReceiver<Vec<u8>>,
-
-    /// Where to send received data
-    recv_tx: UnboundedSender<Vec<u8>>,
-
-    //reader: CharacteristicReader<P>,
-    //writer: CharacteristicWriter<P>,
-
-    btp: BtpWindowState,
+struct BtpCommunicator<P: Peripheral> {
+    reader: CharacteristicReader<P>,
+    writer: CharacteristicWriter<P>,
+    state: BtpWindowState,
 }
 
-impl BtpProcessor {
-    pub async fn processing_loop(&mut self) {
-        // ITEMS to use:
-        //    - Need a BTP window state to control send/receive buffer states
-        //    - separate framing logic. MUST frame correctly
-        //    - have separate rx/tx ?
-        //   - any wake up/sleep methods here
-        //
-        // - general state: determine when the next wakeup call is
-        // -
 
-        loop {
-            tokio::select! {
-                to_send = self.send_rx.recv() => {
-                    println!("SEND TX DATA: {:?}", to_send);
-                }
-            }
-        }
+impl<P: Peripheral> BtpCommunicator<P> {
+    /// Operate interal send/receive loops:
+    ///   - handles keep-alive back and forth
+    ///   - sends if sending queue is non-empty
+    ///   - receives if any data is sent by the remote side
+    async fn drive_io(&mut self) {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl<P: Peripheral> AsyncConnection for BtpCommunicator<P> {
+
+    async fn write(&mut self, data: &[u8]) -> Result<()> {
+        todo!();
+    }
+
+    async fn read(&mut self) -> Result<Vec<u8>> {
+        todo!();
     }
 }
 
@@ -228,45 +220,12 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
                         peripheral.clone(),
                         read_characteristic,
                     )),
-                    send_queue_tx: Mutex::new(RefCell::new(None)),
-                    receive_queue_rx: Mutex::new(RefCell::new(None)),
                 })
             }
         }
     }
 
-    async fn start_send_receive_loops(&mut self, btp_window_state: BtpWindowState) -> Result<()> {
-        let (send_tx, send_rx) = unbounded_channel();
-        self.send_queue_tx
-            .lock()
-            .await
-            .borrow_mut()
-            .replace(send_tx);
-
-        let (recv_tx, recv_rx) = unbounded_channel();
-        self.receive_queue_rx
-            .lock()
-            .await
-            .borrow_mut()
-            .replace(recv_rx);
-
-        let mut processor = BtpProcessorBuilder::default()
-            .send_rx(send_rx)
-            .recv_tx(recv_tx)
-            .btp(btp_window_state)
-            //.reader(self.reader.take().unwrap())
-            //.writer(self.writer.clone())
-            .build()?;
-        
-
-        tokio::spawn(futures::future::lazy(async move |_| {
-            processor.processing_loop().await
-        }));
-
-        Ok(())
-    }
-
-    pub async fn handshake(&mut self) -> Result<BtpHandshakeResponse> {
+    pub async fn handshake(mut self) -> Result<impl AsyncConnection> {
         let mut request = BtpHandshakeRequest::default();
         request.set_segment_size(247); // no idea. Could be something else
         request.set_window_size(6); // no idea either
@@ -281,36 +240,15 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
         let response = BtpHandshakeResponse::parse(reader.raw_read().await?.as_slice())?;
         
+        println!("Handshake response: {:?}", response);
+        
         // TODO: also use response.selected_segment_size
-        let state = BtpWindowState::client(response.selected_window_size);
 
-        self.start_send_receive_loops(state).await?;
-
-        Ok(response)
-    }
-}
-
-#[async_trait]
-impl<P: Peripheral> AsyncConnection for BlePeripheralConnection<P> {
-    async fn write(&self, _data: &[u8]) -> Result<()> {
-        // TODO items:
-        //   - figure out framing
-        //   - setup send and receive acks.
-        //
-        // General spec tips:
-        //   - first buffer is the "Begin" frame
-        //   - last buffer is the "End" frame
-        //
-        //   - there seems to be a limit on number of in flight packets (is there?
-        //     I expect window sizese to be considered here. Need to read spec more.)
-        //   - need to respect sizes received inside handshake.
-        todo!();
-    }
-
-    async fn read(&mut self) -> Result<Vec<u8>> {
-        // TODO: Reads should be able to unpack data
-        //       likely want 'raw read' (no unpacking)
-        //       and let this impl actually be used for general packets.
-        todo!();
+        Ok(BtpCommunicatorBuilder::default()
+            .state(BtpWindowState::client(response.selected_window_size))
+            .reader(self.reader.take().unwrap())
+            .writer(self.writer.clone())
+            .build()?
+        )
     }
 }

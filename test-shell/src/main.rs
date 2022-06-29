@@ -160,25 +160,11 @@ impl<'a> Shell<'a> {
 
         let mut conn = BlePeripheralConnection::new(peripheral).await?;
 
-        let response = conn.handshake().await?;
-
-        println!("Handshake response: {:?}", response);
-        
-        // TODO:
-        //   - setup a BTP window for the given parameters
-        //   - setup frame bits
-        //   - start a send/receive loop (need streams and send/receive queue)
-        //   - communicate via channels.
-
-        // TODO: try to receive some data
-        //   - unpack CHIPoBLE framing
-        //   - decode data
-
-        // TODO:
-        //   - send again (Sigma3) and validate
-
-        // TODO:
+        // TODO: 
+        //   - use connection for PASE
+        //   - use connection for cluster operations
         //   - start implementing CHIP framing after that!
+        //
         println!("Need more implementation here");
 
         Ok(())
