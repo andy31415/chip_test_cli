@@ -137,14 +137,12 @@ pub struct ResizableMessageBuffer {
 }
 
 impl ResizableMessageBuffer {
-    
     fn ensure_length(&mut self, len: usize) {
         if self.data.len() < len {
             self.data.resize(len, 0);
         }
     }
 
-    
     /// Sets a u8 value at a specific index. Resizes the undelying
     /// buffer if needed.
     ///
@@ -167,7 +165,7 @@ impl ResizableMessageBuffer {
     /// assert_eq!(buffer.buffer(), &[11, 0, 0, 10]);
     /// ```
     pub fn set_u8(&mut self, index: usize, value: u8) {
-        self.ensure_length(index+1);
+        self.ensure_length(index + 1);
         self.data[index] = value;
     }
 
@@ -239,8 +237,8 @@ impl ResizableMessageBuffer {
     /// assert_eq!(buffer.buffer(), &[1, 2, 3, 4, 5, 6, 0]);
     /// ```
     pub fn set_at(&mut self, index: usize, buffer: &[u8]) {
-      self.ensure_length(index+buffer.len());
-      self.data[index..(index+buffer.len())].copy_from_slice(buffer);
+        self.ensure_length(index + buffer.len());
+        self.data[index..(index + buffer.len())].copy_from_slice(buffer);
     }
 }
 

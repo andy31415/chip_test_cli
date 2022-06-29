@@ -123,12 +123,12 @@ impl PendingData {
     /// Effectively splits the buffer into chunks.
     ///
     /// Example:
-    /// 
+    ///
     /// ```
     /// use matter_btp::PendingData;
-    /// 
+    ///
     /// let mut data = PendingData::new(vec![1,2,3,4,5,6,7]);
-    /// 
+    ///
     /// assert!(data.first());
     /// assert_eq!(data.next_buffer(2), &[1,2]);
     /// assert!(!data.done());
@@ -140,12 +140,12 @@ impl PendingData {
     /// assert!(!data.first());
     /// assert_eq!(data.next_buffer(3), &[6,7]);
     /// assert!(data.done());
-    /// 
+    ///
     /// ```
     pub fn next_buffer(&mut self, max_size: u16) -> &[u8] {
-       let start = self.offset;
-       self.offset += core::cmp::min(max_size as usize, self.payload.len() - self.offset);
-       &self.payload[start..self.offset]
+        let start = self.offset;
+        self.offset += core::cmp::min(max_size as usize, self.payload.len() - self.offset);
+        &self.payload[start..self.offset]
     }
 }
 
@@ -171,7 +171,6 @@ where
     I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
     async fn send_next(&mut self, sequence_info: PacketSequenceInfo) -> Result<()> {
-
         let mut packet = framing::ResizableMessageBuffer::default();
 
         let mut data_offset = 2; // where packet data is appended
@@ -182,7 +181,7 @@ where
                 packet_flags |= HeaderFlags::CONTAINS_ACK;
                 packet.set_u8(1, nr);
                 packet.set_u8(2, sequence_info.sequence_number);
-                
+
                 data_offset = 3;
             }
             None => {
@@ -194,29 +193,29 @@ where
             }
         };
 
-        
         match self.send_queue.front_mut() {
             Some(pending_data) => {
                 if pending_data.first() {
                     packet_flags |= HeaderFlags::SEGMENT_BEGIN;
                     packet.set_u16(data_offset, pending_data.len_u16());
-                    packet.set_at(data_offset+2, pending_data.next_buffer(self.segment_size - 2));
+                    packet.set_at(
+                        data_offset + 2,
+                        pending_data.next_buffer(self.segment_size - 2),
+                    );
                 } else {
                     packet.set_at(data_offset, pending_data.next_buffer(self.segment_size));
                 }
-                
+
                 if pending_data.done() {
                     packet_flags |= HeaderFlags::SEGMENT_END;
                     self.send_queue.pop_front();
                 }
             }
-            None => {}, // nothing to append/change to the buffer
+            None => {} // nothing to append/change to the buffer
         }
 
         packet.set_u8(0, packet_flags.bits());
         self.writer.raw_write(packet).await
-
-
     }
 
     /// Operate interal send/receive loops:
@@ -250,7 +249,7 @@ where
                                 let packet = BtpDataPacket::parse(vec.as_slice())?;
                                 debug!("Packet data received: {:?}", packet);
                                 self.state.packet_received(packet.sequence_info)?;
-                                
+
                                 // TODO: assemble any packets as "receiving data"
                             }
                         }
