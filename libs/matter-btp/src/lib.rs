@@ -1,5 +1,7 @@
 #![feature(async_closure)]
 
+use std::collections::VecDeque;
+
 use derive_builder::Builder;
 
 use anyhow::{anyhow, Result};
@@ -8,7 +10,7 @@ use async_trait::async_trait;
 use btleplug::api::Characteristic;
 use btleplug::api::{Peripheral, WriteType};
 
-use framing::{BtpSendData, BtpWindowState};
+use framing::{BtpSendData, BtpWindowState, PacketSequenceInfo};
 use log::{debug, info};
 use tokio_stream::StreamExt;
 
@@ -93,6 +95,60 @@ pub struct BlePeripheralConnection<P: Peripheral> {
     reader: Option<CharacteristicReader<P>>,
 }
 
+/// Represents a pending message for sending
+pub struct PendingData {
+    payload: Vec<u8>,
+    offset: usize, // offset into data. 0 if never sent
+}
+
+impl PendingData {
+    pub fn new(payload: Vec<u8>) -> PendingData {
+        PendingData { payload, offset: 0 }
+    }
+
+    /// Is the whole data done sending
+    pub fn done(&self) -> bool {
+        self.offset >= self.payload.len()
+    }
+
+    pub fn first(&self) -> bool {
+        self.offset == 0
+    }
+
+    pub fn len_u16(&self) -> u16 {
+        self.payload.len() as u16
+    }
+
+    /// Returns the next buffer given the provided maximum size of the buffer.
+    /// Effectively splits the buffer into chunks.
+    ///
+    /// Example:
+    /// 
+    /// ```
+    /// use matter_btp::PendingData;
+    /// 
+    /// let mut data = PendingData::new(vec![1,2,3,4,5,6,7]);
+    /// 
+    /// assert!(data.first());
+    /// assert_eq!(data.next_buffer(2), &[1,2]);
+    /// assert!(!data.done());
+    ///
+    /// assert!(!data.first());
+    /// assert_eq!(data.next_buffer(3), &[3,4,5]);
+    /// assert!(!data.done());
+    ///
+    /// assert!(!data.first());
+    /// assert_eq!(data.next_buffer(3), &[6,7]);
+    /// assert!(data.done());
+    /// 
+    /// ```
+    pub fn next_buffer(&mut self, max_size: u16) -> &[u8] {
+       let start = self.offset;
+       self.offset += core::cmp::min(max_size as usize, self.payload.len() - self.offset);
+       &self.payload[start..self.offset]
+    }
+}
+
 /// Represents an open BTP connection.
 #[derive(Builder)]
 #[builder(pattern = "owned")]
@@ -105,20 +161,75 @@ where
     received_packets: InputPackets,
     state: BtpWindowState,
     segment_size: u16,
+
+    #[builder(default)]
+    send_queue: VecDeque<PendingData>,
 }
 
 impl<P: Peripheral, I> BtpCommunicator<P, I>
 where
     I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
+    async fn send_next(&mut self, sequence_info: PacketSequenceInfo) -> Result<()> {
+
+        let mut packet = framing::ResizableMessageBuffer::default();
+
+        let mut data_offset = 2; // where packet data is appended
+        let mut packet_flags = HeaderFlags::empty();
+
+        match sequence_info.ack_number {
+            Some(nr) => {
+                packet_flags |= HeaderFlags::CONTAINS_ACK;
+                packet.set_u8(1, nr);
+                packet.set_u8(2, sequence_info.sequence_number);
+                
+                data_offset = 3;
+            }
+            None => {
+                // IDLE packet without any ack ... this is generally odd
+                packet.set_u8(0, 0);
+                packet.set_u8(1, sequence_info.sequence_number);
+
+                data_offset = 2;
+            }
+        };
+
+        
+        match self.send_queue.front_mut() {
+            Some(pending_data) => {
+                if pending_data.first() {
+                    packet_flags |= HeaderFlags::SEGMENT_BEGIN;
+                    packet.set_u16(data_offset, pending_data.len_u16());
+                    packet.set_at(data_offset+2, pending_data.next_buffer(self.segment_size - 2));
+                } else {
+                    packet.set_at(data_offset, pending_data.next_buffer(self.segment_size));
+                }
+                
+                if pending_data.done() {
+                    packet_flags |= HeaderFlags::SEGMENT_END;
+                    self.send_queue.pop_front();
+                }
+            }
+            None => {}, // nothing to append/change to the buffer
+        }
+
+        packet.set_u8(0, packet_flags.bits());
+        self.writer.raw_write(packet).await
+
+
+    }
+
     /// Operate interal send/receive loops:
     ///   - handles keep-alive back and forth
     ///   - sends if sending queue is non-empty
     ///   - receives if any data is sent by the remote side
     async fn drive_io(&mut self) -> Result<()> {
-        // Figure out if any data MUST be sent right now
-        // TODO: determine here if any data needs to be actually sent.
-        let state = self.state.prepare_send(framing::PacketData::None)?;
+        let data = if self.send_queue.is_empty() {
+            framing::PacketData::None
+        } else {
+            framing::PacketData::HasData
+        };
+        let state = self.state.prepare_send(data)?;
 
         match state {
             BtpSendData::Wait { duration } => {
@@ -131,7 +242,6 @@ where
                 tokio::select! {
                     _ = recv_timeout => {
                         debug!("Timeout receiving reached");
-                        // TODO: log timeout
                     },
                     packet = next_packet => {
                         match packet {
@@ -140,42 +250,17 @@ where
                                 let packet = BtpDataPacket::parse(vec.as_slice())?;
                                 debug!("Packet data received: {:?}", packet);
                                 self.state.packet_received(packet.sequence_info)?;
+                                
+                                // TODO: assemble any packets as "receiving data"
                             }
                         }
                     }
                 };
             }
             BtpSendData::Send(sequence_info) => {
-                debug!("Sending empty packet: {:?}", sequence_info);
-
-                let mut packet = framing::ResizableMessageBuffer::default();
-                match sequence_info.ack_number {
-                    Some(nr) => {
-                        packet.set_u8(0, HeaderFlags::CONTAINS_ACK.bits());
-                        packet.set_u8(1, nr);
-                        packet.set_u8(2, sequence_info.sequence_number);
-                    }
-                    None => {
-                        // IDLE packet without any ack ... this is generally odd
-                        packet.set_u8(0, 0);
-                        packet.set_u8(1, sequence_info.sequence_number);
-                    }
-                }
-
-                self.writer.raw_write(packet).await?;
+                self.send_next(sequence_info).await?;
             }
         }
-
-        // - cases:
-        //    - determine what to write (if anything)
-        //    - ask state to perform read or write
-        //    - select on either read or write
-        //    - Need: i/o in a loop (reading loop? stream of values for read data?)
-
-        // TODO: select reader and writer
-        //  - for writing:
-        //    - figure out if anything to send (state decides)
-        //    - have some form of timeout
 
         Ok(())
     }
@@ -187,7 +272,12 @@ where
     I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
     async fn write(&mut self, data: &[u8]) -> Result<()> {
-        todo!();
+        self.send_queue.push_back(PendingData::new(data.into()));
+
+        while !self.send_queue.is_empty() {
+            self.drive_io().await?;
+        }
+        Ok(())
     }
 
     async fn read(&mut self) -> Result<Vec<u8>> {

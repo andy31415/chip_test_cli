@@ -134,10 +134,17 @@ pub trait BtpBuffer {
 #[derive(Clone, Debug, Default)]
 pub struct ResizableMessageBuffer {
     data: Vec<u8>,
-    data_len: usize,
 }
 
 impl ResizableMessageBuffer {
+    
+    fn ensure_length(&mut self, len: usize) {
+        if self.data.len() < len {
+            self.data.resize(len, 0);
+        }
+    }
+
+    
     /// Sets a u8 value at a specific index. Resizes the undelying
     /// buffer if needed.
     ///
@@ -160,13 +167,7 @@ impl ResizableMessageBuffer {
     /// assert_eq!(buffer.buffer(), &[11, 0, 0, 10]);
     /// ```
     pub fn set_u8(&mut self, index: usize, value: u8) {
-        if self.data.len() < index + 1 {
-            self.data.resize(index + 1, 0);
-        }
-
-        if self.data_len < index + 1 {
-            self.data_len = index + 1;
-        }
+        self.ensure_length(index+1);
         self.data[index] = value;
     }
 
@@ -201,11 +202,51 @@ impl ResizableMessageBuffer {
         self.set_u8(index + 1, h);
         self.set_u8(index, l);
     }
+
+    /// Sets the value within the bufffer, extending if needed.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use matter_btp::framing::{ResizableMessageBuffer, BtpBuffer};
+    ///
+    /// let mut buffer = ResizableMessageBuffer::default();
+    ///
+    /// assert_eq!(buffer.buffer(), &[]);
+    ///
+    /// buffer.set_at(2, &[1,2,3]);
+    /// assert_eq!(buffer.buffer(), &[0, 0, 1, 2, 3]);
+    ///
+    /// buffer.set_at(1, &[4,4]);
+    /// assert_eq!(buffer.buffer(), &[0, 4, 4, 2, 3]);
+    ///
+    /// buffer.set_at(0, &[]);
+    /// assert_eq!(buffer.buffer(), &[0, 4, 4, 2, 3]);
+    ///
+    /// buffer.set_at(0, &[8]);
+    /// assert_eq!(buffer.buffer(), &[8, 4, 4, 2, 3]);
+    ///
+    /// buffer.set_at(0, &[1, 2, 3, 4, 5, 6]);
+    /// assert_eq!(buffer.buffer(), &[1, 2, 3, 4, 5, 6]);
+    ///
+    /// buffer.set_at(5, &[]);
+    /// assert_eq!(buffer.buffer(), &[1, 2, 3, 4, 5, 6]);
+    ///
+    /// buffer.set_at(6, &[]);
+    /// assert_eq!(buffer.buffer(), &[1, 2, 3, 4, 5, 6]);
+    ///
+    /// buffer.set_at(7, &[]);
+    /// assert_eq!(buffer.buffer(), &[1, 2, 3, 4, 5, 6, 0]);
+    /// ```
+    pub fn set_at(&mut self, index: usize, buffer: &[u8]) {
+      self.ensure_length(index+buffer.len());
+      self.data[index..(index+buffer.len())].copy_from_slice(buffer);
+    }
 }
 
 impl BtpBuffer for ResizableMessageBuffer {
     fn buffer(&self) -> &[u8] {
-        self.data.split_at(self.data_len).0
+        self.data.as_slice()
     }
 }
 
