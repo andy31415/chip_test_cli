@@ -104,6 +104,7 @@ where
     writer: CharacteristicWriter<P>,
     received_packets: InputPackets,
     state: BtpWindowState,
+    segment_size: u16,
 }
 
 impl<P: Peripheral, I> BtpCommunicator<P, I>
@@ -138,7 +139,7 @@ where
                             Some(vec) => {
                                 let packet = BtpDataPacket::parse(vec.as_slice())?;
                                 debug!("Packet data received: {:?}", packet);
-                                self.state.packet_received(packet.sequence_info);
+                                self.state.packet_received(packet.sequence_info)?;
                             }
                         }
                     }
@@ -291,12 +292,11 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
 
         println!("Handshake response: {:?}", response);
 
-        // TODO: also use response.selected_segment_size
-
         Ok(BtpCommunicatorBuilder::default()
             .state(BtpWindowState::client(response.selected_window_size))
             .received_packets(packets)
             .writer(self.writer.clone())
+            .segment_size(response.selected_segment_size)
             .build()?)
     }
 }
