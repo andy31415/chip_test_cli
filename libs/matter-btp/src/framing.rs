@@ -84,7 +84,8 @@ impl<'a> BtpDataPacket<'a> {
     pub fn parse(buffer: &'a [u8]) -> Result<BtpDataPacket<'a>> {
         match buffer {
             [flags, rest @ ..] => {
-                let flags = HeaderFlags::from_bits(*flags).ok_or(anyhow!("Invalid flags"))?;
+                let flags =
+                    HeaderFlags::from_bits(*flags).ok_or_else(|| anyhow!("Invalid flags"))?;
 
                 if flags
                     .intersects(HeaderFlags::MANAGEMENT_MESSAGE | HeaderFlags::HANDSHAKE_MESSAGE)

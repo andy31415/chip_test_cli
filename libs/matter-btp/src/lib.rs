@@ -173,23 +173,21 @@ where
     async fn send_next(&mut self, sequence_info: PacketSequenceInfo) -> Result<()> {
         let mut packet = framing::ResizableMessageBuffer::default();
 
-        let mut data_offset = 2; // where packet data is appended
         let mut packet_flags = HeaderFlags::empty();
 
-        match sequence_info.ack_number {
+        // where packet data is appended
+        let data_offset = match sequence_info.ack_number {
             Some(nr) => {
                 packet_flags |= HeaderFlags::CONTAINS_ACK;
                 packet.set_u8(1, nr);
                 packet.set_u8(2, sequence_info.sequence_number);
-
-                data_offset = 3;
+                3
             }
             None => {
                 // IDLE packet without any ack ... this is generally odd
                 packet.set_u8(0, 0);
                 packet.set_u8(1, sequence_info.sequence_number);
-
-                data_offset = 2;
+                2
             }
         };
 
@@ -367,9 +365,10 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
         self.writer.raw_write(request).await?;
 
         // Subscription must be done only after the request raw write
-        let reader = self.reader.take().ok_or(anyhow!(
-            "Reader not available (alredy cleared by another handshake?"
-        ))?;
+        let reader = self
+            .reader
+            .take()
+            .ok_or_else(|| anyhow!("Reader not available (alredy cleared by another handshake?"))?;
 
         let mut packets = reader.start().await?;
 
@@ -377,7 +376,7 @@ impl<P: Peripheral> BlePeripheralConnection<P> {
             packets
                 .next()
                 .await
-                .ok_or(anyhow!("No handshake response"))?
+                .ok_or_else(|| anyhow!("No handshake response"))?
                 .as_slice(),
         )?;
 
