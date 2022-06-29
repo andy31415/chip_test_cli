@@ -1,94 +1,10 @@
-use crate::framing::HeaderFlags;
+use crate::framing::{BtpBuffer, HeaderFlags};
 use anyhow::{anyhow, Result};
 use byteorder::{ByteOrder, LittleEndian};
 
 // a nibble really
 const BTP_PROTOCOL_VERSION: u8 = 0x04;
 const MANAGEMENT_OPCODE: u8 = 0x6C;
-
-pub trait BtpBuffer {
-    fn buffer(&self) -> &[u8];
-}
-
-/// Abstract BTP message size, providing some helpful methods
-/// over a resizable buffer
-#[derive(Clone, Debug, Default)]
-pub struct ResizableMessageBuffer {
-    data: Vec<u8>,
-    data_len: usize,
-}
-
-impl ResizableMessageBuffer {
-    /// Sets a u8 value at a specific index. Resizes the undelying
-    /// buffer if needed.
-    ///
-    /// Example:
-    ///
-    /// ```
-    /// use matter_btp::handshake::{ResizableMessageBuffer, BtpBuffer};
-    ///
-    /// let mut buffer = ResizableMessageBuffer::default();
-    ///
-    /// assert_eq!(buffer.buffer(), &[]);
-    ///
-    /// buffer.set_u8(0, 3);
-    /// assert_eq!(buffer.buffer(), &[3]);
-    ///
-    /// buffer.set_u8(3, 10);
-    /// assert_eq!(buffer.buffer(), &[3, 0, 0, 10]);
-    ///
-    /// buffer.set_u8(0, 11);
-    /// assert_eq!(buffer.buffer(), &[11, 0, 0, 10]);
-    /// ```
-    pub fn set_u8(&mut self, index: usize, value: u8) {
-        if self.data.len() < index + 1 {
-            self.data.resize(index + 1, 0);
-        }
-
-        if self.data_len < index + 1 {
-            self.data_len = index + 1;
-        }
-        self.data[index] = value;
-    }
-
-    /// Sets a 16-bit value in little endian format at a specific index.
-    /// Resizes the undelying buffer if needed.
-    ///
-    /// Example:
-    ///
-    /// ```
-    /// use matter_btp::handshake::{ResizableMessageBuffer, BtpBuffer};
-    ///
-    /// let mut buffer = ResizableMessageBuffer::default();
-    ///
-    /// assert_eq!(buffer.buffer(), &[]);
-    ///
-    /// buffer.set_u8(0, 3);
-    /// assert_eq!(buffer.buffer(), &[3]);
-    ///
-    /// buffer.set_u16(0, 10);
-    /// assert_eq!(buffer.buffer(), &[10, 0]);
-    ///
-    /// buffer.set_u16(1, 0x1234);
-    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12]);
-    ///
-    /// buffer.set_u16(5, 0x6655);
-    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12, 0, 0, 0x55, 0x66]);
-    /// ```
-    pub fn set_u16(&mut self, index: usize, value: u16) {
-        let h = ((value >> 8) & 0xFF) as u8;
-        let l = (value & 0xFF) as u8;
-
-        self.set_u8(index + 1, h);
-        self.set_u8(index, l);
-    }
-}
-
-impl BtpBuffer for ResizableMessageBuffer {
-    fn buffer(&self) -> &[u8] {
-        self.data.split_at(self.data_len).0
-    }
-}
 
 // Represents a handshake request
 #[derive(Clone, Debug)]
@@ -127,7 +43,8 @@ impl BtpBuffer for Request {
     /// Example:
     ///
     /// ```
-    /// use matter_btp::handshake::{Request, BtpBuffer};
+    /// use matter_btp::framing::BtpBuffer;
+    /// use matter_btp::handshake::Request;
     ///
     /// let mut request = Request::default();
     ///

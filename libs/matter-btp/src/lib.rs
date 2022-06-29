@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use btleplug::api::Characteristic;
 use btleplug::api::{Peripheral, WriteType};
 
-use framing::BtpWindowState;
+use framing::{BtpSendData, BtpWindowState};
 use log::{debug, info};
 use tokio_stream::StreamExt;
 
@@ -17,9 +17,8 @@ pub mod framing;
 pub mod handshake;
 pub mod uuids;
 
-use crate::handshake::{
-    BtpBuffer, Request as BtpHandshakeRequest, Response as BtpHandshakeResponse,
-};
+use crate::framing::{BtpBuffer, BtpDataPacket, HeaderFlags};
+use crate::handshake::{Request as BtpHandshakeRequest, Response as BtpHandshakeResponse};
 
 #[async_trait]
 pub trait AsyncConnection {
@@ -106,13 +105,63 @@ where
 
 impl<P: Peripheral, I> BtpCommunicator<P, I>
 where
-    I: tokio_stream::Stream<Item = Vec<u8>> + Send,
+    I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
     /// Operate interal send/receive loops:
     ///   - handles keep-alive back and forth
     ///   - sends if sending queue is non-empty
     ///   - receives if any data is sent by the remote side
-    async fn drive_io(&mut self) {
+    async fn drive_io(&mut self) -> Result<()> {
+        // Figure out if any data MUST be sent right now
+        // TODO: determine here if any data needs to be actually sent.
+        let state = self.state.prepare_send(framing::PacketData::None)?;
+
+        match state {
+            BtpSendData::Wait { duration } => {
+                debug!("Cannot do anything for {:?}", duration);
+                // Either sleep for the given duration OR receive some packet data
+                //
+                let recv_timeout = tokio::time::sleep(duration);
+                let next_packet = self.received_packets.next();
+
+                tokio::select! {
+                    _ = recv_timeout => {
+                        debug!("Timeout receiving reached");
+                        // TODO: log timeout
+                    },
+                    packet = next_packet => {
+                        match packet {
+                            None => return Err(anyhow!("Remote closed connection")),
+                            Some(vec) => {
+                                let packet = BtpDataPacket::parse(vec.as_slice())?;
+                                debug!("Packet data received: {:?}", packet);
+                                self.state.packet_received(packet.sequence_info);
+                            }
+                        }
+                    }
+                };
+            }
+            BtpSendData::Send(sequence_info) => {
+                debug!("Sending empty packet: {:?}", sequence_info);
+
+                let mut packet = framing::ResizableMessageBuffer::default();
+                match sequence_info.ack_number {
+                    Some(nr) => {
+                        packet.set_u8(0, HeaderFlags::CONTAINS_ACK.bits());
+                        packet.set_u8(1, nr);
+                        packet.set_u8(2, sequence_info.sequence_number);
+                    }
+                    None => {
+                        // IDLE packet without any ack ... this is generally odd
+                        packet.set_u8(0, 0);
+                        packet.set_u8(1, sequence_info.sequence_number);
+                    }
+                }
+
+                self.writer.raw_write(packet).await?;
+            }
+        }
+
         // - cases:
         //    - determine what to write (if anything)
         //    - ask state to perform read or write
@@ -124,21 +173,24 @@ where
         //    - figure out if anything to send (state decides)
         //    - have some form of timeout
 
-        todo!()
+        Ok(())
     }
 }
 
 #[async_trait]
 impl<P: Peripheral, I> AsyncConnection for BtpCommunicator<P, I>
 where
-    I: tokio_stream::Stream<Item = Vec<u8>> + Send,
+    I: tokio_stream::Stream<Item = Vec<u8>> + Send + Unpin,
 {
     async fn write(&mut self, data: &[u8]) -> Result<()> {
         todo!();
     }
 
     async fn read(&mut self) -> Result<Vec<u8>> {
-        todo!();
+        loop {
+            self.drive_io().await?;
+            // Need exit logic: when we have some data received
+        }
     }
 }
 

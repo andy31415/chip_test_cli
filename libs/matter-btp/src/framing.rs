@@ -32,6 +32,136 @@ bitflags! {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct BtpDataPacket<'a> {
+    pub flags: HeaderFlags,
+    pub sequence_info: PacketSequenceInfo,
+    pub payload: &'a [u8],
+}
+
+impl<'a> BtpDataPacket<'a> {
+    pub fn parse(buffer: &'a [u8]) -> Result<BtpDataPacket<'a>> {
+        match buffer {
+            [flags, rest @ ..] => {
+                let flags = HeaderFlags::from_bits(*flags).ok_or(anyhow!("Invalid flags"))?;
+
+                match rest {
+                    [ack_number, sequence_number, payload @ ..]
+                        if flags.contains(HeaderFlags::CONTAINS_ACK) =>
+                    {
+                        Ok(BtpDataPacket {
+                            flags,
+                            sequence_info: PacketSequenceInfo {
+                                ack_number: Some(*ack_number),
+                                sequence_number: *sequence_number,
+                            },
+                            payload,
+                        })
+                    }
+                    [sequence_number, payload @ ..]
+                        if !flags.contains(HeaderFlags::CONTAINS_ACK) =>
+                    {
+                        Ok(BtpDataPacket {
+                            flags,
+                            sequence_info: PacketSequenceInfo {
+                                ack_number: None,
+                                sequence_number: *sequence_number,
+                            },
+                            payload,
+                        })
+                    }
+                    _ => Err(anyhow!("Invalid message after checking flags")),
+                }
+            }
+            _ => Err(anyhow!("Message too short: no space for flags")),
+        }
+    }
+}
+
+pub trait BtpBuffer {
+    fn buffer(&self) -> &[u8];
+}
+
+/// Abstract BTP message size, providing some helpful methods
+/// over a resizable buffer
+#[derive(Clone, Debug, Default)]
+pub struct ResizableMessageBuffer {
+    data: Vec<u8>,
+    data_len: usize,
+}
+
+impl ResizableMessageBuffer {
+    /// Sets a u8 value at a specific index. Resizes the undelying
+    /// buffer if needed.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use matter_btp::framing::{ResizableMessageBuffer, BtpBuffer};
+    ///
+    /// let mut buffer = ResizableMessageBuffer::default();
+    ///
+    /// assert_eq!(buffer.buffer(), &[]);
+    ///
+    /// buffer.set_u8(0, 3);
+    /// assert_eq!(buffer.buffer(), &[3]);
+    ///
+    /// buffer.set_u8(3, 10);
+    /// assert_eq!(buffer.buffer(), &[3, 0, 0, 10]);
+    ///
+    /// buffer.set_u8(0, 11);
+    /// assert_eq!(buffer.buffer(), &[11, 0, 0, 10]);
+    /// ```
+    pub fn set_u8(&mut self, index: usize, value: u8) {
+        if self.data.len() < index + 1 {
+            self.data.resize(index + 1, 0);
+        }
+
+        if self.data_len < index + 1 {
+            self.data_len = index + 1;
+        }
+        self.data[index] = value;
+    }
+
+    /// Sets a 16-bit value in little endian format at a specific index.
+    /// Resizes the undelying buffer if needed.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// use matter_btp::framing::{ResizableMessageBuffer, BtpBuffer};
+    ///
+    /// let mut buffer = ResizableMessageBuffer::default();
+    ///
+    /// assert_eq!(buffer.buffer(), &[]);
+    ///
+    /// buffer.set_u8(0, 3);
+    /// assert_eq!(buffer.buffer(), &[3]);
+    ///
+    /// buffer.set_u16(0, 10);
+    /// assert_eq!(buffer.buffer(), &[10, 0]);
+    ///
+    /// buffer.set_u16(1, 0x1234);
+    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12]);
+    ///
+    /// buffer.set_u16(5, 0x6655);
+    /// assert_eq!(buffer.buffer(), &[10, 0x34, 0x12, 0, 0, 0x55, 0x66]);
+    /// ```
+    pub fn set_u16(&mut self, index: usize, value: u16) {
+        let h = ((value >> 8) & 0xFF) as u8;
+        let l = (value & 0xFF) as u8;
+
+        self.set_u8(index + 1, h);
+        self.set_u8(index, l);
+    }
+}
+
+impl BtpBuffer for ResizableMessageBuffer {
+    fn buffer(&self) -> &[u8] {
+        self.data.split_at(self.data_len).0
+    }
+}
+
 // The maximum amount of time after sending a HandshakeRequest
 // to wait for a HandshakeResponse before closing a connection.
 //const SESSION_HANDSHAKE_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -39,6 +169,9 @@ bitflags! {
 /// The maximum amount of time after receipt of a segment before
 /// a stand-alone ack MUST be sent.
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// The timeout to use to send a standalone ACK to the other side.
+const ACK_SEND_TIMEOUT: Duration = Duration::from_millis(2500);
 
 /// The maximum amount of time no unique data has been sent over
 /// a BTP session before a Central device must close the BTP session.
@@ -357,9 +490,9 @@ impl BtpWindowState {
             // ack for now.
             let time_since_last_sent = Instant::now() - self.sent_packets.last_seen_time;
 
-            if time_since_last_sent < ACKNOWLEDGE_TIMEOUT {
+            if time_since_last_sent < ACK_SEND_TIMEOUT {
                 return Ok(BtpSendData::Wait {
-                    duration: ACKNOWLEDGE_TIMEOUT - time_since_last_sent,
+                    duration: ACK_SEND_TIMEOUT - time_since_last_sent,
                 });
             }
         }
@@ -380,9 +513,9 @@ mod test {
 
     use mock_instant::MockClock;
 
-    use crate::framing::{
-        BtpSendData, BtpWindowState, PacketData, PacketSequenceInfo, ACKNOWLEDGE_TIMEOUT,
-    };
+    use crate::framing::{BtpSendData, BtpWindowState, PacketData, PacketSequenceInfo};
+
+    use super::ACK_SEND_TIMEOUT;
 
     #[derive(PartialEq)]
     enum SendDirection {
@@ -475,7 +608,7 @@ mod test {
         pipe.expect_wait_send(
             SendDirection::ServerToClient,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT,
+            ACK_SEND_TIMEOUT,
         );
 
         pipe.expect_send(
@@ -491,12 +624,12 @@ mod test {
         pipe.expect_wait_send(
             SendDirection::ServerToClient,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT,
+            ACK_SEND_TIMEOUT,
         );
         pipe.expect_wait_send(
             SendDirection::ClientToServer,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT,
+            ACK_SEND_TIMEOUT,
         );
 
         pipe.expect_send(
@@ -530,16 +663,16 @@ mod test {
         pipe.expect_wait_send(
             SendDirection::ServerToClient,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT,
+            ACK_SEND_TIMEOUT,
         );
         MockClock::advance(Duration::from_secs(1));
 
         pipe.expect_wait_send(
             SendDirection::ServerToClient,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1),
+            ACK_SEND_TIMEOUT - Duration::from_secs(1),
         );
-        MockClock::advance(ACKNOWLEDGE_TIMEOUT - Duration::from_secs(1));
+        MockClock::advance(ACK_SEND_TIMEOUT - Duration::from_secs(1));
 
         pipe.expect_send(
             SendDirection::ServerToClient,
@@ -554,7 +687,7 @@ mod test {
         pipe.expect_wait_send(
             SendDirection::ClientToServer,
             PacketData::None,
-            ACKNOWLEDGE_TIMEOUT,
+            ACK_SEND_TIMEOUT,
         );
     }
 }

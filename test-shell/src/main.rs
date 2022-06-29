@@ -1,6 +1,6 @@
 use ast::Command;
 
-use matter_btp::BlePeripheralConnection;
+use matter_btp::{AsyncConnection, BlePeripheralConnection};
 
 use std::time::Duration;
 
@@ -158,7 +158,14 @@ impl<'a> Shell<'a> {
 
         println!("Got peripheral: {:?}", peripheral.id());
 
-        let mut conn = BlePeripheralConnection::new(peripheral).await?;
+        let mut conn = BlePeripheralConnection::new(peripheral)
+            .await?
+            .handshake()
+            .await?;
+
+        // TODO: actually need to send PASE
+        let data = conn.read().await?;
+        println!("DATA RECEIVED: {:?}", data);
 
         // TODO:
         //   - use connection for PASE
