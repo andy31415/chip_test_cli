@@ -194,7 +194,7 @@ impl<PayloadType> MessageData<PayloadType> {
     /// ];
     /// let data = ConstU8LittleEndianReader::new(data);
     /// let data = MessageData::parse(data).unwrap();
-    /// 
+    ///
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, Some(NodeId(0xddccbbaa78563412)));
     /// assert_eq!(data.destination, MessageDestination::Group(GroupId(0xabcd)));
@@ -210,7 +210,7 @@ impl<PayloadType> MessageData<PayloadType> {
     /// ];
     /// let data = ConstU8LittleEndianReader::new(data);
     /// let data = MessageData::parse(data).unwrap();
-    /// 
+    ///
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, None);
     /// assert_eq!(data.destination, MessageDestination::Node(NodeId(0x8877665544332211)));
@@ -218,7 +218,9 @@ impl<PayloadType> MessageData<PayloadType> {
     /// ```
     ///
     ///
-    pub fn parse(mut buffer: impl LittleEndianReader<ReminderType=PayloadType>) -> Result<MessageData<PayloadType>> {
+    pub fn parse(
+        mut buffer: impl LittleEndianReader<ReminderType = PayloadType>,
+    ) -> Result<MessageData<PayloadType>> {
         let message_flags = buffer.read_u8()?;
 
         if message_flags & FLAGS_VERSION_MASK != FLAGS_VERSION_V1 {
@@ -257,7 +259,7 @@ impl<PayloadType> MessageData<PayloadType> {
             destination,
             flags,
             counter,
-            payload: buffer.rest()
+            payload: buffer.rest(),
         })
     }
 }
@@ -291,8 +293,7 @@ impl Display for EndianReadError {
     }
 }
 
-impl Error for EndianReadError {
-}
+impl Error for EndianReadError {}
 
 /// Allows reading little endian data and provides a
 /// method to fetch the 'reminder of the data'
@@ -313,10 +314,10 @@ pub trait LittleEndianReader {
 /// out of it via `LittleEndianReader`
 ///
 /// Example:
-/// 
+///
 /// ```
 /// use matter_packets::{LittleEndianReader, ConstU8LittleEndianReader};
-/// 
+///
 /// let mut reader = ConstU8LittleEndianReader::new(&[1,2,3,4,5,6]);
 /// assert_eq!(reader.read_u8(), Ok(1));
 /// assert_eq!(reader.read_u16(), Ok(0x0302));
