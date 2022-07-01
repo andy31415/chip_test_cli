@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-#[derive(Debug,  Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct NodeId(pub u64);
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -11,6 +11,9 @@ pub struct VendorId(pub u16);
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct ProductId(pub u16);
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+pub struct ExchangeId(pub u16);
 
 impl Debug for ProductId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

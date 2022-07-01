@@ -1,4 +1,9 @@
-use matter_types::VendorId;
+use std::{error::Error, fmt::Display};
+
+use matter_types::{VendorId, ExchangeId};
+use anyhow::{Result, anyhow};
+
+use crate::reader::LittleEndianReader;
 
 /// an error when parsing a protocol
 #[derive(PartialEq, Debug)]
@@ -6,6 +11,17 @@ pub enum ProtocolOpCodeError {
     UnknownProtocolId,
     UnknownOpCode,
 }
+
+impl Display for ProtocolOpCodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProtocolOpCodeError::UnknownProtocolId => f.write_str("Unknown protocol id"),
+            ProtocolOpCodeError::UnknownOpCode => f.write_str("Unknown protocol opcode"),
+        }
+    }
+}
+
+impl Error for ProtocolOpCodeError{}
 
 /// Opcodes specific to secure channel
 #[repr(u8)]
@@ -171,8 +187,16 @@ impl ProtocolOpCode {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
-struct ExchangeId(u16);
+bitflags::bitflags! {
+    /// Represents security flags within the message header
+    pub struct ExchangeFlags: u8 {
+       const INITIATOR = 0b_0000_0001;
+       const ACKNOWLEDGEMENT = 0b_0000_0010;
+       const RELIABILITY = 0b_0000_0100;
+       const SECURED_EXTENSIONS = 0b_0000_1000;
+       const VENDOR = 0b_0001_0000;
+    }
+}
 
 /// A protocol header. 
 /// 
@@ -191,25 +215,54 @@ struct ExchangeId(u16);
 /// | *              | Payload                                   |
 ///
 pub struct Header {
-    // FIXME: flags
-    
-    exchange: ExchangeId,
-    protocol_opcode: ProtocolOpCode, /// contains both protocol id and opcode
-    vendor_id: VendorId,
-                                    
-    
+   pub flags: ExchangeFlags,
+   pub protocol_opcode: ProtocolOpCode, /// contains both protocol id and opcode
+   pub exchange: ExchangeId,
+   pub vendor_id: Option<VendorId>,
+   pub ack_counter: Option<u32>
 }
 
 
+impl Header {
+    /// Parses a given buffer and interprets it as a MATTER message.
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// use matter_types::*;
+    /// use matter_packets::payload::*;
+    ///
+    /// // invalid messages are rejected
+    /// let mut data: &[u8] = &[]; // too short
+    /// assert!(Header::parse(&mut data).is_err()); // too short
+    /// ```
+    ///
+    ///
+    pub fn parse(buffer: &mut impl LittleEndianReader) -> Result<Header> {
+        let flags = ExchangeFlags::from_bits(buffer.read_le_u8()?).ok_or_else(|| anyhow!("Invalid exchange flags"))?;
+        let opcode = buffer.read_le_u8()?;
+        let exchange = ExchangeId(buffer.read_le_u16()?);
+        let protocol = buffer.read_le_u8()?;
+        
+        
+        let vendor_id = if flags.contains(ExchangeFlags::VENDOR)  {
+            Some(VendorId(buffer.read_le_u16()?))
+        } else {
+            None
+        };
+        
+        let ack_counter = if flags.contains(ExchangeFlags::ACKNOWLEDGEMENT) {
+            Some(buffer.read_le_u32()?)
+        } else {
+            None
+        };
 
-// TODO: protocol header
-
-// CHIP Protocol format:
-// - u8:    Exchange flags
-// - u8:    Protocol Opcode: depends on opcode for protocol
-// - u16:   Exchange ID
-// - u16:   Protocol ID:     0 == secure channel, 1 == IM, 2 == BDX, 3 == User Directed Commissioning
-// - [u16]: Protocol Vendor Id
-// - [u32]: Ack Counter
-// - ???: extensions (secured) - based on flag: length (u16) + data
-// - ???: payload
+        Ok(Header{
+            flags,
+            protocol_opcode: ProtocolOpCode::from_id_and_opcode(protocol, opcode)?,
+            exchange,
+            vendor_id,
+            ack_counter,
+        })
+    }
+}
