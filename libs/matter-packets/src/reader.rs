@@ -86,4 +86,20 @@ mod tests {
         assert_eq!(data.read_le_u32(), Ok(0x01121101));
         assert_eq!(data, &[0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     }
+
+    #[test]
+    fn mut_parse_data() {
+        let mut data: &mut [u8]  = &mut [0xaa; 16];
+        data[0] = 2;
+        assert_eq!(data.read_le_u8(), Ok(2));
+
+        data[0] = 0x34;
+        data[1] = 0x12;
+        assert_eq!(data.read_le_u16(), Ok(0x1234));
+
+        data[0] = 0x11;
+        assert_eq!(data.read_le_u64(), Ok(0xaaaaaaaaaaaaaa11));
+
+        assert_eq!(data, [0xaa; 5]);
+    }
 }
