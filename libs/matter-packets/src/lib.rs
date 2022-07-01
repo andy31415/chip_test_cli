@@ -299,24 +299,22 @@ pub trait LittleEndianReader {
 /// ```
 pub struct ConstU8LittleEndianReader<'a> {
     data: &'a [u8],
-    offset: usize,
 }
 
 impl<'a> ConstU8LittleEndianReader<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self { data, offset: 0 }
+        Self { data }
     }
 
     fn consume(&mut self, count: usize) -> core::result::Result<&'a [u8], EndianReadError> {
-        if self.data.len() < self.offset + count {
+        if self.data.len() < count {
             return Err(EndianReadError::InsufficientData);
         }
 
-        let start = self.offset;
-        self.offset += count;
-        let end = self.offset;
+        let (head, tail) = self.data.split_at(count);
+        self.data = tail;
 
-        Ok(&self.data[start..end])
+        Ok(head)
     }
 }
 
@@ -340,7 +338,7 @@ impl<'a> LittleEndianReader for ConstU8LittleEndianReader<'a> {
     }
 
     fn rest(self) -> Self::ReminderType {
-        self.data.split_at(self.offset).1
+        self.data
     }
 }
 
