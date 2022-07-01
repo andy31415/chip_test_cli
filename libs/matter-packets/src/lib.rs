@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use byteorder::ByteOrder;
 
 #[repr(u8)]
 pub enum Protocols {
@@ -263,11 +264,105 @@ impl MessageData {
 // - ???: extensions (secured) - based on flag: length (u16) + data
 // - ???: payload
 
+#[derive(Debug, PartialEq)]
+pub enum EndianReadError {
+    InsufficientData,
+}
+
+/// Allows reading little endian data and provides a
+/// method to fetch the 'reminder of the data'
+pub trait LittleEndianReader {
+    type ReminderType;
+
+    /// Get the next byte, advance iterator.
+    fn read_u8(&mut self) -> core::result::Result<u8, EndianReadError>;
+    fn read_u16(&mut self) -> core::result::Result<u16, EndianReadError>;
+    fn read_u32(&mut self) -> core::result::Result<u32, EndianReadError>;
+    fn read_u64(&mut self) -> core::result::Result<u64, EndianReadError>;
+
+    /// Returns the reminder of the data, consuming self
+    fn rest(self) -> Self::ReminderType;
+}
+
+/// Wraps a `&[u8]` value for reading little endian data
+/// out of it via `LittleEndianReader`
+///
+/// Example:
+/// 
+/// ```
+/// use matter_packets::{LittleEndianReader, ConstU8LittleEndianReader};
+/// 
+/// let mut reader = ConstU8LittleEndianReader::new(&[1,2,3,4,5,6]);
+/// assert_eq!(reader.read_u8(), Ok(1));
+/// assert_eq!(reader.read_u16(), Ok(0x0302));
+/// assert_eq!(reader.rest(), &[4,5,6]);
+/// ```
+pub struct ConstU8LittleEndianReader<'a> {
+    data: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> ConstU8LittleEndianReader<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self { data, offset: 0 }
+    }
+
+    fn consume(&mut self, count: usize) -> core::result::Result<&'a [u8], EndianReadError> {
+        if self.data.len() < self.offset + count {
+            return Err(EndianReadError::InsufficientData);
+        }
+
+        let start = self.offset;
+        self.offset += count;
+        let end = self.offset;
+
+        Ok(&self.data[start..end])
+    }
+}
+
+impl<'a> LittleEndianReader for ConstU8LittleEndianReader<'a> {
+    type ReminderType = &'a [u8];
+
+    fn read_u8(&mut self) -> core::result::Result<u8, EndianReadError> {
+        Ok(self.consume(1)?[0])
+    }
+
+    fn read_u16(&mut self) -> core::result::Result<u16, EndianReadError> {
+        Ok(byteorder::LittleEndian::read_u16(self.consume(2)?))
+    }
+
+    fn read_u32(&mut self) -> core::result::Result<u32, EndianReadError> {
+        Ok(byteorder::LittleEndian::read_u32(self.consume(4)?))
+    }
+
+    fn read_u64(&mut self) -> core::result::Result<u64, EndianReadError> {
+        Ok(byteorder::LittleEndian::read_u64(self.consume(8)?))
+    }
+
+    fn rest(self) -> Self::ReminderType {
+        self.data.split_at(self.offset).1
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn const_parse_data() {
+        let data = &[
+            1, 0x11, 0x12, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        ];
+
+        let mut reader = ConstU8LittleEndianReader::new(data);
+
+        assert_eq!(reader.read_u8(), Ok(1));
+        assert_eq!(reader.read_u16(), Ok(0x1211));
+        assert_eq!(reader.read_u64(), Ok(0x0807060504030201));
+        assert!(reader.read_u8().is_err());
+
+        let mut reader = ConstU8LittleEndianReader::new(data);
+        assert_eq!(reader.read_u32(), Ok(0x01121101));
+        assert_eq!(reader.rest(), &[0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     }
 }
