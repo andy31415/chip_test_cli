@@ -1,3 +1,4 @@
+#![feature(slice_take)]
 use std::{error::Error, fmt::Display};
 
 use anyhow::{anyhow, Result};
@@ -157,7 +158,9 @@ pub struct MessageData<PayloadType> {
     pub payload: PayloadType,
 }
 
-impl<PayloadType> MessageData<PayloadType> {
+impl<PayloadType> MessageData<PayloadType>
+where LittleEndianReader<PayloadType>: BytesConsumer
+{
     /// Parses a given buffer and interprets it as a MATTER message.
     ///
     /// Examples:
@@ -166,9 +169,9 @@ impl<PayloadType> MessageData<PayloadType> {
     /// use matter_packets::*;
     ///
     /// // invalid messages are rejected
-    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[])).is_err()); // too short
-    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[0, 0, 0])).is_err()); // too short
-    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[0x11, 0, 0, 0, 0, 0, 0, 0])).is_err()); // invalid version
+    /// assert!(MessageData::parse(LittleEndianReader::new_const(&[])).is_err()); // too short
+    /// assert!(MessageData::parse(LittleEndianReader::new_const(&[0, 0, 0])).is_err()); // too short
+    /// assert!(MessageData::parse(LittleEndianReader::new_const(&[0x11, 0, 0, 0, 0, 0, 0, 0])).is_err()); // invalid version
     ///
     /// let data = &[
     ///   0x00,                   // flags: none set
@@ -176,7 +179,7 @@ impl<PayloadType> MessageData<PayloadType> {
     ///   0x00,                   // security flags
     ///   0x00, 0x00, 0x00, 0x00, // counter
     /// ];
-    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = LittleEndianReader::new_const(data);
     /// let data = MessageData::parse(data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x1234);
@@ -192,7 +195,7 @@ impl<PayloadType> MessageData<PayloadType> {
     ///   0x12, 0x34, 0x56, 0x78, 0xaa, 0xbb, 0xcc, 0xdd,  // source node id
     ///   0xcd, 0xab,             // destination group id
     /// ];
-    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = LittleEndianReader::new_const(data);
     /// let data = MessageData::parse(data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x2233);
@@ -208,7 +211,7 @@ impl<PayloadType> MessageData<PayloadType> {
     ///   0x45, 0x23, 0x01, 0x00, // counter
     ///   0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,  // destination node id
     /// ];
-    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = LittleEndianReader::new_const(data);
     /// let data = MessageData::parse(data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x2233);
@@ -218,9 +221,7 @@ impl<PayloadType> MessageData<PayloadType> {
     /// ```
     ///
     ///
-    pub fn parse(
-        mut buffer: impl LittleEndianReader<ReminderType = PayloadType>,
-    ) -> Result<MessageData<PayloadType>> {
+    pub fn parse(mut buffer: LittleEndianReader<PayloadType>) -> Result<MessageData<PayloadType>> {
         let message_flags = buffer.read_u8()?;
 
         if message_flags & FLAGS_VERSION_MASK != FLAGS_VERSION_V1 {
@@ -264,12 +265,6 @@ impl<PayloadType> MessageData<PayloadType> {
     }
 }
 
-impl<'a> From<&'a [u8]> for ConstU8LittleEndianReader<'a> {
-    fn from(data: &'a [u8]) -> Self {
-        ConstU8LittleEndianReader::new(data)
-    }
-}
-
 // CHIP Protocol format:
 // - u8:    Exchange flags
 // - u8:    Protocol Opcode: depends on opcode for protocol
@@ -295,83 +290,65 @@ impl Display for EndianReadError {
 
 impl Error for EndianReadError {}
 
-/// Allows reading little endian data and provides a
-/// method to fetch the 'reminder of the data'
-pub trait LittleEndianReader {
-    type ReminderType;
 
-    /// Get the next byte, advance iterator.
-    fn read_u8(&mut self) -> core::result::Result<u8, EndianReadError>;
-    fn read_u16(&mut self) -> core::result::Result<u16, EndianReadError>;
-    fn read_u32(&mut self) -> core::result::Result<u32, EndianReadError>;
-    fn read_u64(&mut self) -> core::result::Result<u64, EndianReadError>;
-
-    /// Returns the reminder of the data, consuming self
-    fn rest(self) -> Self::ReminderType;
+pub trait BytesConsumer {
+    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError>;
 }
 
-/// Wraps a `&[u8]` value for reading little endian data
-/// out of it via `LittleEndianReader`
-///
-/// Example:
-///
-/// ```
-/// use matter_packets::{LittleEndianReader, ConstU8LittleEndianReader};
-///
-/// let mut reader = ConstU8LittleEndianReader::new(&[1,2,3,4,5,6]);
-/// assert_eq!(reader.read_u8(), Ok(1));
-/// assert_eq!(reader.read_u16(), Ok(0x0302));
-/// assert_eq!(reader.rest(), &[4,5,6]);
-///
-/// let mut reader = ConstU8LittleEndianReader::new(&[1,0,0,0,0,0,0,0,9]);
-/// assert_eq!(reader.read_u64(), Ok(1));
-/// assert!(reader.read_u16().is_err());
-///
-/// ```
-pub struct ConstU8LittleEndianReader<'a> {
-    data: &'a [u8],
+pub struct LittleEndianReader<T> {
+    data: T,
 }
 
-impl<'a> ConstU8LittleEndianReader<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
-        Self { data }
+impl<'a> LittleEndianReader<&'a [u8]> {
+    pub fn new_const(data: &'a [u8]) -> Self {
+        Self {data}
     }
+}
+impl<'a> LittleEndianReader<&'a mut [u8]> {
+    pub fn new_mut(data: &'a mut [u8]) -> Self {
+        Self {data}
+    }
+}
 
-    fn consume(&mut self, count: usize) -> core::result::Result<&'a [u8], EndianReadError> {
-        if self.data.len() < count {
-            return Err(EndianReadError::InsufficientData);
+impl<'a> BytesConsumer for LittleEndianReader<&'a [u8]> {
+    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
+        self.data.take(..count).ok_or_else(|| EndianReadError::InsufficientData)
+    }
+}
+
+impl BytesConsumer for LittleEndianReader<&mut [u8]> {
+    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
+        match self.data.take_mut(..count) {
+            Some(data) => Ok(data),
+            None => Err(EndianReadError::InsufficientData),
         }
-
-        let (head, tail) = self.data.split_at(count);
-        self.data = tail;
-
-        Ok(head)
     }
 }
 
-impl<'a> LittleEndianReader for ConstU8LittleEndianReader<'a> {
-    type ReminderType = &'a [u8];
-
-    fn read_u8(&mut self) -> core::result::Result<u8, EndianReadError> {
+impl<'a, T> LittleEndianReader<T> 
+where LittleEndianReader<T>: BytesConsumer
+{
+    pub fn read_u8(&mut self) -> core::result::Result<u8, EndianReadError> {
         Ok(self.consume(1)?[0])
     }
 
-    fn read_u16(&mut self) -> core::result::Result<u16, EndianReadError> {
+    pub fn read_u16(&mut self) -> core::result::Result<u16, EndianReadError> {
         Ok(byteorder::LittleEndian::read_u16(self.consume(2)?))
     }
 
-    fn read_u32(&mut self) -> core::result::Result<u32, EndianReadError> {
+    pub fn read_u32(&mut self) -> core::result::Result<u32, EndianReadError> {
         Ok(byteorder::LittleEndian::read_u32(self.consume(4)?))
     }
 
-    fn read_u64(&mut self) -> core::result::Result<u64, EndianReadError> {
+    pub fn read_u64(&mut self) -> core::result::Result<u64, EndianReadError> {
         Ok(byteorder::LittleEndian::read_u64(self.consume(8)?))
     }
 
-    fn rest(self) -> Self::ReminderType {
+    pub fn rest(self) -> T {
         self.data
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -383,14 +360,14 @@ mod tests {
             1, 0x11, 0x12, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
         ];
 
-        let mut reader = ConstU8LittleEndianReader::new(data);
+        let mut reader = LittleEndianReader::new_const(data);
 
         assert_eq!(reader.read_u8(), Ok(1));
         assert_eq!(reader.read_u16(), Ok(0x1211));
         assert_eq!(reader.read_u64(), Ok(0x0807060504030201));
         assert!(reader.read_u8().is_err());
 
-        let mut reader = ConstU8LittleEndianReader::new(data);
+        let mut reader = LittleEndianReader::new_const(data);
         assert_eq!(reader.read_u32(), Ok(0x01121101));
         assert_eq!(reader.rest(), &[0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     }
