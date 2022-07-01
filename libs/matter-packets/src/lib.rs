@@ -155,7 +155,7 @@ pub trait BytesConsumer {
 impl BytesConsumer for &[u8] {
     fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
         self.take(..count)
-            .ok_or_else(|| EndianReadError::InsufficientData)
+            .ok_or(EndianReadError::InsufficientData)
     }
 }
 
