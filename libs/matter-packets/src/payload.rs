@@ -176,12 +176,12 @@ impl ProtocolOpCode {
     }
     
     /// parse a tuple of protocol id and opcode id and return the underlying known opcode value.
-    pub fn from_id_and_opcode(protocol_id: u8, opcode: u8) -> Result<ProtocolOpCode, ProtocolOpCodeError> {
-        match protocol_id {
-            0 => Ok(ProtocolOpCode::SecureChannel(SecureChannelOpcode::try_from(opcode)?)),
-            1 => Ok(ProtocolOpCode::InteractionModel(InteractionModelOpcode::try_from(opcode)?)),
-            2 => Ok(ProtocolOpCode::Bdx(BdxOpcode::try_from(opcode)?)),
-            3 => Ok(ProtocolOpCode::UserDirectedCommissioning(UserDirectedCommissioningOpcode::try_from(opcode)?)),
+    pub fn from_id_and_opcode(raw_protocol_id: u16, raw_opcode: u8) -> Result<ProtocolOpCode, ProtocolOpCodeError> {
+        match raw_protocol_id {
+            0 => Ok(ProtocolOpCode::SecureChannel(SecureChannelOpcode::try_from(raw_opcode)?)),
+            1 => Ok(ProtocolOpCode::InteractionModel(InteractionModelOpcode::try_from(raw_opcode)?)),
+            2 => Ok(ProtocolOpCode::Bdx(BdxOpcode::try_from(raw_opcode)?)),
+            3 => Ok(ProtocolOpCode::UserDirectedCommissioning(UserDirectedCommissioningOpcode::try_from(raw_opcode)?)),
             _ => Err(ProtocolOpCodeError::UnknownProtocolId)
         }
     }
@@ -235,6 +235,21 @@ impl Header {
     /// // invalid messages are rejected
     /// let mut data: &[u8] = &[]; // too short
     /// assert!(Header::parse(&mut data).is_err()); // too short
+    ///
+    /// let mut data: &[u8] = &[
+    ///    0x00,         // exchange flags
+    ///    0x22,         // Pake1 (for secure channel)
+    ///    0x12, 0x23,   // Exchange Id
+    ///    0x00, 0x00,   // secure channel protocol,
+    ///    0xab, 0xff, 0x12   // payload
+    /// ]; 
+    /// let header = Header::parse(&mut data).unwrap();
+    /// 
+    /// assert_eq!(header.flags, ExchangeFlags::empty());
+    /// assert_eq!(header.exchange, ExchangeId(0x2312));
+    /// assert_eq!(header.protocol_opcode, ProtocolOpCode::SecureChannel(SecureChannelOpcode::PasePake1));
+    /// assert_eq!(data, &[0xab, 0xff, 0x12]);
+    ///
     /// ```
     ///
     ///
@@ -242,7 +257,7 @@ impl Header {
         let flags = ExchangeFlags::from_bits(buffer.read_le_u8()?).ok_or_else(|| anyhow!("Invalid exchange flags"))?;
         let opcode = buffer.read_le_u8()?;
         let exchange = ExchangeId(buffer.read_le_u16()?);
-        let protocol = buffer.read_le_u8()?;
+        let protocol = buffer.read_le_u16()?;
         
         
         let vendor_id = if flags.contains(ExchangeFlags::VENDOR)  {
