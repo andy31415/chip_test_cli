@@ -1,3 +1,5 @@
+use std::{error::Error, fmt::Display};
+
 use anyhow::{anyhow, Result};
 use byteorder::ByteOrder;
 
@@ -146,15 +148,16 @@ impl SecurityFlags {
 /// | `16 bytes`     | (Optional) Message Integrity Check (for all except unecrypted) |
 ///
 #[derive(Debug, Default, PartialEq)]
-pub struct MessageData {
+pub struct MessageData<PayloadType> {
     pub flags: SecurityFlags,
     pub session_id: u16,
     pub source: Option<NodeId>,
     pub destination: MessageDestination,
     pub counter: u32,
+    pub payload: PayloadType,
 }
 
-impl MessageData {
+impl<PayloadType> MessageData<PayloadType> {
     /// Parses a given buffer and interprets it as a MATTER message.
     ///
     /// Examples:
@@ -163,45 +166,51 @@ impl MessageData {
     /// use matter_packets::*;
     ///
     /// // invalid messages are rejected
-    /// assert!(MessageData::parse(&[]).is_err()); // too short
-    /// assert!(MessageData::parse(&[0, 0, 0]).is_err()); // too short
-    /// assert!(MessageData::parse(&[0x11, 0, 0, 0, 0, 0, 0, 0]).is_err()); // invalid version
+    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[])).is_err()); // too short
+    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[0, 0, 0])).is_err()); // too short
+    /// assert!(MessageData::parse(ConstU8LittleEndianReader::new(&[0x11, 0, 0, 0, 0, 0, 0, 0])).is_err()); // invalid version
     ///
-    /// let data = MessageData::parse(&[
+    /// let data = &[
     ///   0x00,                   // flags: none set
     ///   0x34, 0x12,             // session id: 0x1234
     ///   0x00,                   // security flags
     ///   0x00, 0x00, 0x00, 0x00, // counter
-    /// ]).unwrap();
+    /// ];
+    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = MessageData::parse(data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x1234);
     /// assert_eq!(data.source, None);
     /// assert_eq!(data.destination, MessageDestination::None);
     /// assert_eq!(data.flags.session_type().unwrap(), SessionType::Unicast);
     ///
-    /// let data = MessageData::parse(&[
+    /// let data = &[
     ///   0x06,                   // flags: Source node id and destination group
     ///   0x33, 0x22,             // session id: 0x2233
     ///   0x01,                   // security flags
     ///   0x01, 0x00, 0x00, 0x00, // counter
     ///   0x12, 0x34, 0x56, 0x78, 0xaa, 0xbb, 0xcc, 0xdd,  // source node id
     ///   0xcd, 0xab,             // destination group id
-    /// ]).unwrap();
-    ///
+    /// ];
+    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = MessageData::parse(data).unwrap();
+    /// 
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, Some(NodeId(0xddccbbaa78563412)));
     /// assert_eq!(data.destination, MessageDestination::Group(GroupId(0xabcd)));
     /// assert_eq!(data.counter, 1);
     /// assert_eq!(data.flags.session_type().unwrap(), SessionType::GroupMulticast);
-    ///
-    /// let data = MessageData::parse(&[
+    ///  
+    /// let data = &[
     ///   0x01,                   // flags: Destination node id
     ///   0x33, 0x22,             // session id: 0x2233
     ///   0x00,                   // security flags
     ///   0x45, 0x23, 0x01, 0x00, // counter
     ///   0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,  // destination node id
-    /// ]).unwrap();
-    ///
+    /// ];
+    /// let data = ConstU8LittleEndianReader::new(data);
+    /// let data = MessageData::parse(data).unwrap();
+    /// 
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, None);
     /// assert_eq!(data.destination, MessageDestination::Node(NodeId(0x8877665544332211)));
@@ -209,9 +218,7 @@ impl MessageData {
     /// ```
     ///
     ///
-    pub fn parse(buffer: &[u8]) -> Result<MessageData> {
-        let mut buffer = byteordered::ByteOrdered::le(buffer);
-
+    pub fn parse(mut buffer: impl LittleEndianReader<ReminderType=PayloadType>) -> Result<MessageData<PayloadType>> {
         let message_flags = buffer.read_u8()?;
 
         if message_flags & FLAGS_VERSION_MASK != FLAGS_VERSION_V1 {
@@ -250,7 +257,14 @@ impl MessageData {
             destination,
             flags,
             counter,
+            payload: buffer.rest()
         })
+    }
+}
+
+impl<'a> From<&'a [u8]> for ConstU8LittleEndianReader<'a> {
+    fn from(data: &'a [u8]) -> Self {
+        ConstU8LittleEndianReader::new(data)
     }
 }
 
@@ -267,6 +281,17 @@ impl MessageData {
 #[derive(Debug, PartialEq)]
 pub enum EndianReadError {
     InsufficientData,
+}
+
+impl Display for EndianReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EndianReadError::InsufficientData => f.write_str("Insufficient data"),
+        }
+    }
+}
+
+impl Error for EndianReadError {
 }
 
 /// Allows reading little endian data and provides a
