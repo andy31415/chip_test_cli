@@ -257,6 +257,8 @@ impl Header {
             None
         };
 
+        // TODO: skip over extensions if they are present here ...
+
         Ok(Header{
             flags,
             protocol_opcode: ProtocolOpCode::from_id_and_opcode(protocol, opcode)?,
