@@ -186,9 +186,7 @@ impl Header {
 
         // TODO:
         //   - skip extensions if any
-        //   - grab payload
-        //   - consider MIC
-        //
+
         Ok(Header {
             session_id,
             source,
