@@ -2,8 +2,8 @@ use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use byteorder::{ByteOrder, LittleEndian};
 
-use matter_types::VendorId;
 use matter_types::ProductId;
+use matter_types::VendorId;
 
 use core::fmt::Debug;
 

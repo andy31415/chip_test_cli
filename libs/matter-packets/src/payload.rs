@@ -1,7 +1,7 @@
 use std::{error::Error, fmt::Display};
 
-use matter_types::{VendorId, ExchangeId};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use matter_types::{ExchangeId, VendorId};
 
 use crate::reader::LittleEndianReader;
 
@@ -21,7 +21,7 @@ impl Display for ProtocolOpCodeError {
     }
 }
 
-impl Error for ProtocolOpCodeError{}
+impl Error for ProtocolOpCodeError {}
 
 /// Opcodes specific to secure channel
 #[repr(u8)]
@@ -47,23 +47,22 @@ impl TryFrom<u8> for SecureChannelOpcode {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-          0x00 => Ok(SecureChannelOpcode::MessageCounterSyncRequest),
-          0x01 => Ok(SecureChannelOpcode::MessageCounterSyncResponse),
-          0x10 => Ok(SecureChannelOpcode::MrpStandaloneAck),
-          0x20 => Ok(SecureChannelOpcode::PbkdfParamRequest),
-          0x21 => Ok(SecureChannelOpcode::PbkdfParamResponse),
-          0x22 => Ok(SecureChannelOpcode::PasePake1),
-          0x23 => Ok(SecureChannelOpcode::PasePake2),
-          0x24 => Ok(SecureChannelOpcode::PasePake3),
-          0x30 => Ok(SecureChannelOpcode::CaseSigma1),
-          0x31 => Ok(SecureChannelOpcode::CaseSigma2),
-          0x32 => Ok(SecureChannelOpcode::CaseSigma3),
-          0x33 => Ok(SecureChannelOpcode::CaseSigma2Resume),
-          0x40 => Ok(SecureChannelOpcode::StatusReport),
-          _ => Err(ProtocolOpCodeError::UnknownOpCode),
+            0x00 => Ok(SecureChannelOpcode::MessageCounterSyncRequest),
+            0x01 => Ok(SecureChannelOpcode::MessageCounterSyncResponse),
+            0x10 => Ok(SecureChannelOpcode::MrpStandaloneAck),
+            0x20 => Ok(SecureChannelOpcode::PbkdfParamRequest),
+            0x21 => Ok(SecureChannelOpcode::PbkdfParamResponse),
+            0x22 => Ok(SecureChannelOpcode::PasePake1),
+            0x23 => Ok(SecureChannelOpcode::PasePake2),
+            0x24 => Ok(SecureChannelOpcode::PasePake3),
+            0x30 => Ok(SecureChannelOpcode::CaseSigma1),
+            0x31 => Ok(SecureChannelOpcode::CaseSigma2),
+            0x32 => Ok(SecureChannelOpcode::CaseSigma3),
+            0x33 => Ok(SecureChannelOpcode::CaseSigma2Resume),
+            0x40 => Ok(SecureChannelOpcode::StatusReport),
+            _ => Err(ProtocolOpCodeError::UnknownOpCode),
         }
     }
-
 }
 
 /// Opcodes specific to interaction model
@@ -87,17 +86,17 @@ impl TryFrom<u8> for InteractionModelOpcode {
 
     fn try_from(code: u8) -> Result<Self, Self::Error> {
         match code {
-          0x01 => Ok(InteractionModelOpcode::StatusResponse),
-          0x02 => Ok(InteractionModelOpcode::ReadRequest),
-          0x03 => Ok(InteractionModelOpcode::SubscribeRequest),
-          0x04 => Ok(InteractionModelOpcode::SubscribeResponse),
-          0x05 => Ok(InteractionModelOpcode::ReportData),
-          0x06 => Ok(InteractionModelOpcode::WriteRequest),
-          0x07 => Ok(InteractionModelOpcode::WriteResponse),
-          0x08 => Ok(InteractionModelOpcode::InvokeRequest),
-          0x09 => Ok(InteractionModelOpcode::InvokeResponse),
-          0x0A => Ok(InteractionModelOpcode::TimedRequest),
-          _ => Err(ProtocolOpCodeError::UnknownOpCode),
+            0x01 => Ok(InteractionModelOpcode::StatusResponse),
+            0x02 => Ok(InteractionModelOpcode::ReadRequest),
+            0x03 => Ok(InteractionModelOpcode::SubscribeRequest),
+            0x04 => Ok(InteractionModelOpcode::SubscribeResponse),
+            0x05 => Ok(InteractionModelOpcode::ReportData),
+            0x06 => Ok(InteractionModelOpcode::WriteRequest),
+            0x07 => Ok(InteractionModelOpcode::WriteResponse),
+            0x08 => Ok(InteractionModelOpcode::InvokeRequest),
+            0x09 => Ok(InteractionModelOpcode::InvokeResponse),
+            0x0A => Ok(InteractionModelOpcode::TimedRequest),
+            _ => Err(ProtocolOpCodeError::UnknownOpCode),
         }
     }
 }
@@ -122,21 +121,20 @@ impl TryFrom<u8> for BdxOpcode {
 
     fn try_from(code: u8) -> Result<Self, Self::Error> {
         match code {
-          0x01 => Ok(BdxOpcode::SendInit),
-          0x02 => Ok(BdxOpcode::SendAccept),
-          0x04 => Ok(BdxOpcode::ReceiveInit),
-          0x05 => Ok(BdxOpcode::ReceiveAccept),
-          0x10 => Ok(BdxOpcode::BlockQuery),
-          0x11 => Ok(BdxOpcode::Block),
-          0x12 => Ok(BdxOpcode::BlockEOF),
-          0x13 => Ok(BdxOpcode::BlockAck),
-          0x14 => Ok(BdxOpcode::BlockAckEOF),
-          0x15 => Ok(BdxOpcode::BlockQueryWithSkip),
-          _ => Err(ProtocolOpCodeError::UnknownOpCode),
+            0x01 => Ok(BdxOpcode::SendInit),
+            0x02 => Ok(BdxOpcode::SendAccept),
+            0x04 => Ok(BdxOpcode::ReceiveInit),
+            0x05 => Ok(BdxOpcode::ReceiveAccept),
+            0x10 => Ok(BdxOpcode::BlockQuery),
+            0x11 => Ok(BdxOpcode::Block),
+            0x12 => Ok(BdxOpcode::BlockEOF),
+            0x13 => Ok(BdxOpcode::BlockAck),
+            0x14 => Ok(BdxOpcode::BlockAckEOF),
+            0x15 => Ok(BdxOpcode::BlockQueryWithSkip),
+            _ => Err(ProtocolOpCodeError::UnknownOpCode),
         }
     }
 }
-
 
 /// Opcodes specific to user directed commissioning
 #[repr(u8)]
@@ -150,8 +148,8 @@ impl TryFrom<u8> for UserDirectedCommissioningOpcode {
 
     fn try_from(code: u8) -> Result<Self, Self::Error> {
         match code {
-          0x00 => Ok(UserDirectedCommissioningOpcode::IdentificationDeclaration),
-          _ => Err(ProtocolOpCodeError::UnknownOpCode),
+            0x00 => Ok(UserDirectedCommissioningOpcode::IdentificationDeclaration),
+            _ => Err(ProtocolOpCodeError::UnknownOpCode),
         }
     }
 }
@@ -161,7 +159,7 @@ pub enum ProtocolOpCode {
     SecureChannel(SecureChannelOpcode),
     InteractionModel(InteractionModelOpcode),
     Bdx(BdxOpcode),
-    UserDirectedCommissioning(UserDirectedCommissioningOpcode)
+    UserDirectedCommissioning(UserDirectedCommissioningOpcode),
 }
 
 impl ProtocolOpCode {
@@ -174,15 +172,24 @@ impl ProtocolOpCode {
             ProtocolOpCode::UserDirectedCommissioning(_) => 3,
         }
     }
-    
+
     /// parse a tuple of protocol id and opcode id and return the underlying known opcode value.
-    pub fn from_id_and_opcode(raw_protocol_id: u16, raw_opcode: u8) -> Result<ProtocolOpCode, ProtocolOpCodeError> {
+    pub fn from_id_and_opcode(
+        raw_protocol_id: u16,
+        raw_opcode: u8,
+    ) -> Result<ProtocolOpCode, ProtocolOpCodeError> {
         match raw_protocol_id {
-            0 => Ok(ProtocolOpCode::SecureChannel(SecureChannelOpcode::try_from(raw_opcode)?)),
-            1 => Ok(ProtocolOpCode::InteractionModel(InteractionModelOpcode::try_from(raw_opcode)?)),
+            0 => Ok(ProtocolOpCode::SecureChannel(
+                SecureChannelOpcode::try_from(raw_opcode)?,
+            )),
+            1 => Ok(ProtocolOpCode::InteractionModel(
+                InteractionModelOpcode::try_from(raw_opcode)?,
+            )),
             2 => Ok(ProtocolOpCode::Bdx(BdxOpcode::try_from(raw_opcode)?)),
-            3 => Ok(ProtocolOpCode::UserDirectedCommissioning(UserDirectedCommissioningOpcode::try_from(raw_opcode)?)),
-            _ => Err(ProtocolOpCodeError::UnknownProtocolId)
+            3 => Ok(ProtocolOpCode::UserDirectedCommissioning(
+                UserDirectedCommissioningOpcode::try_from(raw_opcode)?,
+            )),
+            _ => Err(ProtocolOpCodeError::UnknownProtocolId),
         }
     }
 }
@@ -198,9 +205,9 @@ bitflags::bitflags! {
     }
 }
 
-/// A protocol header. 
-/// 
-/// 
+/// A protocol header.
+///
+///
 /// # Binary layout
 ///
 /// | Size           | Description                               |
@@ -215,13 +222,13 @@ bitflags::bitflags! {
 /// | *              | Payload                                   |
 ///
 pub struct Header {
-   pub flags: ExchangeFlags,
-   pub protocol_opcode: ProtocolOpCode, /// contains both protocol id and opcode
-   pub exchange: ExchangeId,
-   pub vendor_id: Option<VendorId>,
-   pub ack_counter: Option<u32>
+    pub flags: ExchangeFlags,
+    pub protocol_opcode: ProtocolOpCode,
+    /// contains both protocol id and opcode
+    pub exchange: ExchangeId,
+    pub vendor_id: Option<VendorId>,
+    pub ack_counter: Option<u32>,
 }
-
 
 impl Header {
     /// Parses a given buffer and interprets it as a MATTER message.
@@ -242,9 +249,9 @@ impl Header {
     ///    0x12, 0x23,   // Exchange Id
     ///    0x00, 0x00,   // secure channel protocol,
     ///    0xab, 0xff, 0x12   // payload
-    /// ]; 
+    /// ];
     /// let header = Header::parse(&mut data).unwrap();
-    /// 
+    ///
     /// assert_eq!(header.flags, ExchangeFlags::empty());
     /// assert_eq!(header.exchange, ExchangeId(0x2312));
     /// assert_eq!(header.protocol_opcode, ProtocolOpCode::SecureChannel(SecureChannelOpcode::PasePake1));
@@ -254,18 +261,18 @@ impl Header {
     ///
     ///
     pub fn parse(buffer: &mut impl LittleEndianReader) -> Result<Header> {
-        let flags = ExchangeFlags::from_bits(buffer.read_le_u8()?).ok_or_else(|| anyhow!("Invalid exchange flags"))?;
+        let flags = ExchangeFlags::from_bits(buffer.read_le_u8()?)
+            .ok_or_else(|| anyhow!("Invalid exchange flags"))?;
         let opcode = buffer.read_le_u8()?;
         let exchange = ExchangeId(buffer.read_le_u16()?);
         let protocol = buffer.read_le_u16()?;
-        
-        
-        let vendor_id = if flags.contains(ExchangeFlags::VENDOR)  {
+
+        let vendor_id = if flags.contains(ExchangeFlags::VENDOR) {
             Some(VendorId(buffer.read_le_u16()?))
         } else {
             None
         };
-        
+
         let ack_counter = if flags.contains(ExchangeFlags::ACKNOWLEDGEMENT) {
             Some(buffer.read_le_u32()?)
         } else {
@@ -274,7 +281,7 @@ impl Header {
 
         // TODO: skip over extensions if they are present here ...
 
-        Ok(Header{
+        Ok(Header {
             flags,
             protocol_opcode: ProtocolOpCode::from_id_and_opcode(protocol, opcode)?,
             exchange,

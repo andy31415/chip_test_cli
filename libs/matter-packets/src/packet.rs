@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use matter_types::{NodeId, GroupId};
+use matter_types::{GroupId, NodeId};
 
 use super::reader::LittleEndianReader;
 

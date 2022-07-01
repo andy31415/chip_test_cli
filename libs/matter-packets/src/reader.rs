@@ -1,5 +1,5 @@
-use std::{error::Error, fmt::Display};
 use byteorder::ByteOrder;
+use std::{error::Error, fmt::Display};
 
 /// Errors when reading endian-specific data
 #[derive(Debug, PartialEq)]
@@ -19,15 +19,13 @@ impl Error for EndianReadError {}
 
 /// Allows taking out a sequence of bytes from some source of data.
 pub trait BytesSource {
-
     /// Read a sequence of bytes from the source.
     fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError>;
 }
 
 impl BytesSource for &[u8] {
     fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
-        self.take(..count)
-            .ok_or(EndianReadError::InsufficientData)
+        self.take(..count).ok_or(EndianReadError::InsufficientData)
     }
 }
 
@@ -71,7 +69,7 @@ mod tests {
 
     #[test]
     fn const_parse_data() {
-        let mut data: &[u8]  = &[
+        let mut data: &[u8] = &[
             1, 0x11, 0x12, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
         ];
 
@@ -80,7 +78,7 @@ mod tests {
         assert_eq!(data.read_le_u64(), Ok(0x0807060504030201));
         assert!(data.read_le_u8().is_err());
 
-        let mut data: &[u8]  = &[
+        let mut data: &[u8] = &[
             1, 0x11, 0x12, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
         ];
         assert_eq!(data.read_le_u32(), Ok(0x01121101));
@@ -89,7 +87,7 @@ mod tests {
 
     #[test]
     fn mut_parse_data() {
-        let mut data: &mut [u8]  = &mut [0xaa; 16];
+        let mut data: &mut [u8] = &mut [0xaa; 16];
         data[0] = 2;
         assert_eq!(data.read_le_u8(), Ok(2));
 
