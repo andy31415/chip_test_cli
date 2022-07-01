@@ -1,3 +1,5 @@
+use matter_types::VendorId;
+
 /// an error when parsing a protocol
 #[derive(PartialEq, Debug)]
 pub enum ProtocolOpCodeError {
@@ -167,6 +169,35 @@ impl ProtocolOpCode {
             _ => Err(ProtocolOpCodeError::UnknownProtocolId)
         }
     }
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+struct ExchangeId(u16);
+
+/// A protocol header. 
+/// 
+/// 
+/// # Binary layout
+///
+/// | Size           | Description                               |
+/// |----------------|-------------------------------------------|
+/// | `u8`           | Exchange flags                            |
+/// | `u8`           | Protocol opcode                           |
+/// | `u16`          | Exchange Id                               |
+/// | `u16`          | Protocol Id                               |
+/// | `0/u16`        | (Optional) Vendor Id                      |
+/// | `0/u32`        | (Optional) Ack counter                    |
+/// | `u16 + (len)`  | (Optional) u16-length prefixed extensions |
+/// | *              | Payload                                   |
+///
+pub struct Header {
+    // FIXME: flags
+    
+    exchange: ExchangeId,
+    protocol_opcode: ProtocolOpCode, /// contains both protocol id and opcode
+    vendor_id: VendorId,
+                                    
+    
 }
 
 

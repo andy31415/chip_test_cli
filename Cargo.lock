@@ -710,6 +710,7 @@ dependencies = [
  "derive_builder",
  "futures",
  "log",
+ "matter-types",
  "mock_instant",
  "tokio",
  "tokio-stream",
@@ -724,7 +725,12 @@ dependencies = [
  "bitflags",
  "byteorder",
  "byteordered",
+ "matter-types",
 ]
+
+[[package]]
+name = "matter-types"
+version = "0.1.0"
 
 [[package]]
 name = "memchr"

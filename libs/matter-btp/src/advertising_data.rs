@@ -1,25 +1,11 @@
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use byteorder::{ByteOrder, LittleEndian};
+
+use matter_types::VendorId;
+use matter_types::ProductId;
+
 use core::fmt::Debug;
-
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct VendorId(pub u16);
-
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub struct ProductId(pub u16);
-
-impl Debug for ProductId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("ProductId(0x{:X})", self.0))
-    }
-}
-
-impl Debug for VendorId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("VendorId(0x{:X})", self.0))
-    }
-}
 
 bitflags! {
     pub struct ComissionableFlags: u8 {
@@ -46,7 +32,8 @@ impl Commissionable {
     /// Example:
     ///
     /// ```
-    /// use matter_btp::advertising_data::{Commissionable, Discriminator, ComissionableFlags, VendorId, ProductId};
+    /// use matter_types::*;
+    /// use matter_btp::advertising_data::{Commissionable, Discriminator, ComissionableFlags};
     ///
     /// // buffer too short
     /// assert!(Commissionable::parse(&[]).is_err());

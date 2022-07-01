@@ -1,14 +1,7 @@
 use anyhow::{anyhow, Result};
+use matter_types::{NodeId, GroupId};
 
 use super::reader::LittleEndianReader;
-
-/// Uniquely identifies a node in a matter fabric
-#[derive(Debug, PartialEq)]
-pub struct NodeId(pub u64);
-
-/// Uniquely identifies a group in a matter fabric
-#[derive(Debug, PartialEq)]
-pub struct GroupId(pub u16);
 
 #[derive(Debug, PartialEq)]
 pub enum MessageDestination {
@@ -103,6 +96,7 @@ impl Header {
     /// Examples:
     ///
     /// ```
+    /// use matter_types::*;
     /// use matter_packets::packet::*;
     ///
     /// // invalid messages are rejected
