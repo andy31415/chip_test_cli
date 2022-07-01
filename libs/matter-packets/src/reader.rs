@@ -17,19 +17,22 @@ impl Display for EndianReadError {
 
 impl Error for EndianReadError {}
 
-pub trait BytesConsumer {
-    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError>;
+/// Allows taking out a sequence of bytes from some source of data.
+pub trait BytesSource {
+
+    /// Read a sequence of bytes from the source.
+    fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError>;
 }
 
-impl BytesConsumer for &[u8] {
-    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
+impl BytesSource for &[u8] {
+    fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
         self.take(..count)
             .ok_or(EndianReadError::InsufficientData)
     }
 }
 
-impl BytesConsumer for &mut [u8] {
-    fn consume(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
+impl BytesSource for &mut [u8] {
+    fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
         match self.take_mut(..count) {
             Some(data) => Ok(data),
             None => Err(EndianReadError::InsufficientData),
@@ -44,21 +47,21 @@ pub trait LittleEndianReader {
     fn read_le_u64(&mut self) -> core::result::Result<u64, EndianReadError>;
 }
 
-impl<T: BytesConsumer> LittleEndianReader for T {
+impl<T: BytesSource> LittleEndianReader for T {
     fn read_le_u8(&mut self) -> core::result::Result<u8, EndianReadError> {
-        Ok(self.consume(1)?[0])
+        Ok(self.read(1)?[0])
     }
 
     fn read_le_u16(&mut self) -> core::result::Result<u16, EndianReadError> {
-        Ok(byteorder::LittleEndian::read_u16(self.consume(2)?))
+        Ok(byteorder::LittleEndian::read_u16(self.read(2)?))
     }
 
     fn read_le_u32(&mut self) -> core::result::Result<u32, EndianReadError> {
-        Ok(byteorder::LittleEndian::read_u32(self.consume(4)?))
+        Ok(byteorder::LittleEndian::read_u32(self.read(4)?))
     }
 
     fn read_le_u64(&mut self) -> core::result::Result<u64, EndianReadError> {
-        Ok(byteorder::LittleEndian::read_u64(self.consume(8)?))
+        Ok(byteorder::LittleEndian::read_u64(self.read(8)?))
     }
 }
 
