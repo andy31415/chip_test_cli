@@ -1,7 +1,7 @@
 #![feature(slice_take)]
 
 pub mod reader;
-pub mod packet_header;
+pub mod packet;
 
 #[repr(u8)]
 pub enum Protocols {

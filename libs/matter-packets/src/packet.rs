@@ -89,7 +89,7 @@ impl SecurityFlags {
 /// | `16 bytes`     | (Optional) Message Integrity Check (for all except unecrypted) |
 ///
 #[derive(Debug, Default, PartialEq)]
-pub struct MessageHeader {
+pub struct Header {
     pub flags: SecurityFlags,
     pub session_id: u16,
     pub source: Option<NodeId>,
@@ -97,23 +97,23 @@ pub struct MessageHeader {
     pub counter: u32,
 }
 
-impl MessageHeader {
+impl Header {
     /// Parses a given buffer and interprets it as a MATTER message.
     ///
     /// Examples:
     ///
     /// ```
-    /// use matter_packets::packet_header::*;
+    /// use matter_packets::packet::*;
     ///
     /// // invalid messages are rejected
     /// let mut data: &[u8] = &[]; // too short
-    /// assert!(MessageHeader::parse(&mut data).is_err()); // too short
+    /// assert!(Header::parse(&mut data).is_err()); // too short
     ///
     /// let mut data: &[u8] = &[0, 0, 0]; // too short
-    /// assert!(MessageHeader::parse(&mut data).is_err()); // too short
+    /// assert!(Header::parse(&mut data).is_err()); // too short
     ///
     /// let mut data: &[u8] = &[0x11, 0, 0, 0, 0, 0, 0, 0, 0]; // invalid version
-    /// assert!(MessageHeader::parse(&mut data).is_err());
+    /// assert!(Header::parse(&mut data).is_err());
     ///
     /// let mut data: &[u8] = &[
     ///   0x00,                   // flags: none set
@@ -122,7 +122,7 @@ impl MessageHeader {
     ///   0x00, 0x00, 0x00, 0x00, // counter
     ///   0xaa, 0xbb, 0xcc        // payload
     /// ];
-    /// let parsed = MessageHeader::parse(&mut data).unwrap();
+    /// let parsed = Header::parse(&mut data).unwrap();
     ///
     /// assert_eq!(parsed.session_id, 0x1234);
     /// assert_eq!(parsed.source, None);
@@ -138,7 +138,7 @@ impl MessageHeader {
     ///   0x12, 0x34, 0x56, 0x78, 0xaa, 0xbb, 0xcc, 0xdd,  // source node id
     ///   0xcd, 0xab,             // destination group id
     /// ];
-    /// let data = MessageHeader::parse(&mut data).unwrap();
+    /// let data = Header::parse(&mut data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, Some(NodeId(0xddccbbaa78563412)));
@@ -153,7 +153,7 @@ impl MessageHeader {
     ///   0x45, 0x23, 0x01, 0x00, // counter
     ///   0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,  // destination node id
     /// ];
-    /// let data = MessageHeader::parse(&mut data).unwrap();
+    /// let data = Header::parse(&mut data).unwrap();
     ///
     /// assert_eq!(data.session_id, 0x2233);
     /// assert_eq!(data.source, None);
@@ -162,7 +162,7 @@ impl MessageHeader {
     /// ```
     ///
     ///
-    pub fn parse(buffer: &mut impl LittleEndianReader) -> Result<MessageHeader> {
+    pub fn parse(buffer: &mut impl LittleEndianReader) -> Result<Header> {
         let message_flags = buffer.read_le_u8()?;
 
         if message_flags & FLAGS_VERSION_MASK != FLAGS_VERSION_V1 {
@@ -195,7 +195,7 @@ impl MessageHeader {
         //   - grab payload
         //   - consider MIC
         //
-        Ok(MessageHeader {
+        Ok(Header {
             session_id,
             source,
             destination,
