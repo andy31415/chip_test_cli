@@ -296,6 +296,11 @@ pub trait LittleEndianReader {
 /// assert_eq!(reader.read_u8(), Ok(1));
 /// assert_eq!(reader.read_u16(), Ok(0x0302));
 /// assert_eq!(reader.rest(), &[4,5,6]);
+///
+/// let mut reader = ConstU8LittleEndianReader::new(&[1,0,0,0,0,0,0,0,9]);
+/// assert_eq!(reader.read_u64(), Ok(1));
+/// assert!(reader.read_u16().is_err());
+///
 /// ```
 pub struct ConstU8LittleEndianReader<'a> {
     data: &'a [u8],
