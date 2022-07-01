@@ -4,6 +4,6 @@ use libfuzzer_sys::fuzz_target;
 use matter_packets::*;
 
 fuzz_target!(|data: &[u8]| {
-    let data = ConstU8LittleEndianReader::new(data);
+    let data = LittleEndianReader::new_const(data);
     MessageData::parse(data);
 });
