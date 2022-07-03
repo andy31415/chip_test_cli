@@ -220,7 +220,6 @@ bitflags::bitflags! {
 /// | `0/u32`        | (Optional) Ack counter                    |
 /// | `u16 + (len)`  | (Optional) u16-length prefixed extensions |
 /// | *              | Payload                                   |
-///
 pub struct Header {
     pub flags: ExchangeFlags,
     pub protocol_opcode: ProtocolOpCode,
@@ -232,6 +231,9 @@ pub struct Header {
 
 impl Header {
     /// Parses a given buffer and interprets it as a MATTER message.
+    ///
+    /// It does NOT skip over secured extensions (but flag is parsed and can
+    /// be used as needed).
     ///
     /// Examples:
     ///
@@ -279,8 +281,7 @@ impl Header {
             None
         };
 
-        // TODO: skip over extensions if they are present here ...
-
+        // NOTE: this does NOT skip over extensions here
         Ok(Header {
             flags,
             protocol_opcode: ProtocolOpCode::from_id_and_opcode(protocol, opcode)?,

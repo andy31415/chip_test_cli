@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use matter_types::{GroupId, NodeId};
 
+use crate::reader;
+
 use super::reader::LittleEndianReader;
 
 #[derive(Debug, PartialEq)]
@@ -184,8 +186,10 @@ impl Header {
             _ => MessageDestination::None,
         };
 
-        // TODO:
-        //   - skip extensions if any
+        if flags.contains(SecurityFlags::MESSAGE_EXTENSIONS) {
+            let extension_size = buffer.read_le_u16()? as usize;
+            buffer.skip(extension_size)?;
+        }
 
         Ok(Header {
             session_id,

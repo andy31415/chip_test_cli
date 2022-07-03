@@ -43,6 +43,9 @@ pub trait LittleEndianReader {
     fn read_le_u16(&mut self) -> core::result::Result<u16, EndianReadError>;
     fn read_le_u32(&mut self) -> core::result::Result<u32, EndianReadError>;
     fn read_le_u64(&mut self) -> core::result::Result<u64, EndianReadError>;
+
+    fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError>;
+    fn skip(&mut self, count: usize) -> core::result::Result<(), EndianReadError>;
 }
 
 impl<T: BytesSource> LittleEndianReader for T {
@@ -60,6 +63,15 @@ impl<T: BytesSource> LittleEndianReader for T {
 
     fn read_le_u64(&mut self) -> core::result::Result<u64, EndianReadError> {
         Ok(byteorder::LittleEndian::read_u64(self.read(8)?))
+    }
+
+    fn skip(&mut self, count: usize) -> core::result::Result<(), EndianReadError> {
+        self.read(count)?;
+        Ok(())
+    }
+
+    fn read(&mut self, count: usize) -> core::result::Result<&[u8], EndianReadError> {
+        T::read(self, count)
     }
 }
 
@@ -99,5 +111,27 @@ mod tests {
         assert_eq!(data.read_le_u64(), Ok(0xaaaaaaaaaaaaaa11));
 
         assert_eq!(data, [0xaa; 5]);
+    }
+
+    #[test]
+    fn skip_support() {
+        let mut data: &[u8] = &[1, 2, 3, 4, 5, 6, 7];
+
+        assert!(data.skip(2).is_ok());
+        assert_eq!(data.read_le_u16(), Ok(0x0403));
+        assert!(data.skip(1).is_ok());
+        assert_eq!(data, &[6, 7]);
+        assert!(data.skip(0).is_ok());
+        assert_eq!(data, &[6, 7]);
+    }
+
+    #[test]
+    fn read_support() {
+        let mut data: &[u8] = &[1, 2, 3, 4, 5, 6, 7];
+
+        assert_eq!(LittleEndianReader::read(&mut data, 3).unwrap(), &[1, 2, 3]);
+        assert_eq!(LittleEndianReader::read(&mut data, 0).unwrap(), &[]);
+        assert_eq!(LittleEndianReader::read(&mut data, 1).unwrap(), &[4]);
+        assert_eq!(data, &[5, 6, 7]);
     }
 }
