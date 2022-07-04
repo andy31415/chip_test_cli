@@ -47,6 +47,28 @@ pub trait LittleEndianWriter {
     }
 }
 
+/// Writes little endian data via [LittleEndianWriter] to a u8 slice.
+///
+/// # Example
+///
+/// ```
+/// use matter_packets::writer::{SliceLittleEndianWriter, LittleEndianWriter};
+///
+/// let mut buffer = [0u8; 10];
+/// {
+///    let mut writer = SliceLittleEndianWriter::new(buffer.as_mut_slice());
+///
+///    assert!(writer.write_le_u32(0x1122abcd).is_ok());
+///    assert_eq!(writer.written(), 4);
+///
+///    assert!(writer.write(&[1,2,3]).is_ok());
+///    assert_eq!(writer.written(), 7);
+/// }
+///
+/// assert_eq!(buffer.as_slice(), &[0xcd, 0xab, 0x22, 0x11, 1, 2, 3, 0, 0, 0])
+///
+/// ```
+
 #[derive(Debug)]
 pub struct SliceLittleEndianWriter<'a> {
     buffer: &'a mut [u8],
