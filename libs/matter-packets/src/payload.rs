@@ -281,7 +281,7 @@ impl Default for ExchangeFlags {
 /// | `0/u32`        | (Optional) Ack counter                    |
 /// | `u16 + (len)`  | (Optional) u16-length prefixed extensions |
 /// | *              | Payload                                   |
-#[derive(Builder, Debug, Clone, Copy)]
+#[derive(Builder, Debug, Clone, Copy, PartialEq)]
 pub struct Header {
     #[builder(default)]
     pub flags: ExchangeFlags,

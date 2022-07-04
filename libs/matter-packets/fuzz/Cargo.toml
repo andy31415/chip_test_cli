@@ -23,3 +23,9 @@ name = "message_data"
 path = "fuzz_targets/message_data.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "payload_data"
+path = "fuzz_targets/payload_data.rs"
+test = false
+doc = false
