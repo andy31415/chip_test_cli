@@ -725,6 +725,7 @@ dependencies = [
  "bitflags",
  "byteorder",
  "byteordered",
+ "derive_builder",
  "matter-types",
 ]
 

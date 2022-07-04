@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use matter_types::{GroupId, NodeId};
+use derive_builder::Builder;
 
-use crate::reader;
-
+use crate::writer::LittleEndianWriter;
 use super::reader::LittleEndianReader;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum MessageDestination {
     None,
     Node(NodeId),
@@ -83,11 +83,15 @@ impl SecurityFlags {
 /// | *              | Payload                                                        |
 /// | `16 bytes`     | (Optional) Message Integrity Check (for all except unecrypted) |
 ///
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Builder)]
 pub struct Header {
     pub flags: SecurityFlags,
     pub session_id: u16,
+
+    #[builder(default)]
     pub source: Option<NodeId>,
+
+    #[builder(default)]
     pub destination: MessageDestination,
     pub counter: u32,
 }
@@ -198,5 +202,68 @@ impl Header {
             flags,
             counter,
         })
+    }
+
+    /// Serialize a header into some write destination.
+    /// 
+    /// # Examples:
+    /// 
+    /// ```
+    /// use matter_packets::packet::{Header, HeaderBuilder, SecurityFlags};
+    /// use matter_packets::writer::{LittleEndianWriter, SliceLittleEndianWriter};
+    ///
+    /// let header = HeaderBuilder::default()
+    ///           .session_id(123)
+    ///           .counter(0x11223344)
+    ///           .flags(SecurityFlags::PRIVACY)
+    ///           .build()
+    ///           .unwrap();
+    /// 
+    /// let mut buffer = [0u8; 16];
+    /// let cnt = {
+    ///    let mut writer = SliceLittleEndianWriter::new(buffer.as_mut_slice());
+    ///    assert!(header.write(&mut writer).is_ok());
+    ///    writer.written()
+    /// };
+    /// 
+    /// assert_eq!(cnt, 8);
+    /// assert_eq!(buffer.as_slice(), &[
+    ///   0x00,                   // flags: none
+    ///   123, 0,                 // session id: 0x2233
+    ///   0x80,                   // security flags: PRIVACY
+    ///   0x44, 0x33, 0x22, 0x11, // counter
+    ///   0, 0, 0, 0, 0, 0, 0, 0  // rest of the buffer stays unwritten
+    /// ]);
+    /// ```
+    pub fn write(&self, writer: &mut impl LittleEndianWriter) -> Result<()> {
+        let message_flags = FLAGS_VERSION_V1
+            | match self.source {
+                Some(_) => FLAGS_SOURCE_NODE_ID_SET,
+                None => 0,
+            }
+            | match self.destination {
+                MessageDestination::Node(_) => FLAGS_DESTINATION_NODE,
+                MessageDestination::Group(_) => FLAGS_DESTINATION_GROUP,
+                MessageDestination::None => 0,
+            };
+
+        writer.write_le_u8(message_flags)?;
+        writer.write_le_u16(self.session_id)?;
+        writer.write_le_u8(self.flags.bits())?;
+        writer.write_le_u32(self.counter)?;
+
+        if let Some(NodeId(id)) = self.source {
+            writer.write_le_u64(id)?;
+        }
+
+        match self.destination {
+            MessageDestination::Node(NodeId(id)) => writer.write_le_u64(id)?,
+            MessageDestination::Group(GroupId(id)) => writer.write_le_u16(id)?,
+            MessageDestination::None => {}
+        };
+
+        // NOTE: this does NOT write the extensions
+
+        Ok(())
     }
 }
