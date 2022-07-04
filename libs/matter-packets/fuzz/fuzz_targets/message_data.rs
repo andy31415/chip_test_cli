@@ -2,7 +2,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use matter_packets::packet::Header;
-use matter_packets::writer::{LittleEndianWriter, SliceLittleEndianWriter};
+use matter_packets::writer::SliceLittleEndianWriter;
 
 fuzz_target!(|data: &[u8]| {
     let mut data = Vec::from(data);
