@@ -98,6 +98,11 @@ pub struct Header {
 
 impl Header {
     /// Parses a given buffer and interprets it as a MATTER message.
+    /// 
+    /// NOTE:
+    ///   [SecurityFlags::MESSAGE_EXTENSIONS] is NOT processed (i.e. the extensions
+    ///   are not skipped as part of parsing the header) and should be skipped or 
+    ///   interpreted separately.
     ///
     /// Examples:
     ///
@@ -189,11 +194,6 @@ impl Header {
             FLAGS_DESTINATION_GROUP => MessageDestination::Group(GroupId(buffer.read_le_u16()?)),
             _ => MessageDestination::None,
         };
-
-        if flags.contains(SecurityFlags::MESSAGE_EXTENSIONS) {
-            let extension_size = buffer.read_le_u16()? as usize;
-            buffer.skip(extension_size)?;
-        }
 
         Ok(Header {
             session_id,
