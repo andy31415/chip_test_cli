@@ -79,18 +79,18 @@ impl<'a> LittleEndianWriter for SliceLittleEndianWriter<'a> {
 
 /// Implements a [LittleEndianWriter] by keeping track of
 /// how much data would be written if it would be serialized.
-/// 
+///
 /// Discards any data written to self.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 /// use matter_packets::writer::{SpaceEstimator, LittleEndianWriter};
-/// 
+///
 /// let mut estimator = SpaceEstimator::default();
-/// 
+///
 /// assert_eq!(estimator.written(), 0);
-/// 
+///
 /// estimator.write_le_u32(123);
 /// assert_eq!(estimator.written(), 4);
 ///
@@ -151,7 +151,13 @@ mod tests {
     fn slice_writer_overflow() {
         let mut buffer = [0u8; 3];
         let mut writer = SliceLittleEndianWriter::new(buffer.as_mut_slice());
-        assert_eq!(writer.write_le_u32(123), Err(EndianWriteError::InsufficientSpace { missing: 1 }));
-        assert_eq!(writer.write_le_u64(1122), Err(EndianWriteError::InsufficientSpace { missing: 5 }));
+        assert_eq!(
+            writer.write_le_u32(123),
+            Err(EndianWriteError::InsufficientSpace { missing: 1 })
+        );
+        assert_eq!(
+            writer.write_le_u64(1122),
+            Err(EndianWriteError::InsufficientSpace { missing: 5 })
+        );
     }
 }
