@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
-use matter_types::{GroupId, NodeId};
 use derive_builder::Builder;
+use matter_types::{GroupId, NodeId};
 
-use crate::writer::LittleEndianWriter;
 use super::reader::LittleEndianReader;
+use crate::writer::LittleEndianWriter;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum MessageDestination {
@@ -98,10 +98,10 @@ pub struct Header {
 
 impl Header {
     /// Parses a given buffer and interprets it as a MATTER message.
-    /// 
+    ///
     /// NOTE:
     ///   [SecurityFlags::MESSAGE_EXTENSIONS] is NOT processed (i.e. the extensions
-    ///   are not skipped as part of parsing the header) and should be skipped or 
+    ///   are not skipped as part of parsing the header) and should be skipped or
     ///   interpreted separately.
     ///
     /// Examples:
@@ -205,9 +205,9 @@ impl Header {
     }
 
     /// Serialize a header into some write destination.
-    /// 
+    ///
     /// # Examples:
-    /// 
+    ///
     /// ```
     /// use matter_packets::packet::{Header, HeaderBuilder, SecurityFlags};
     /// use matter_packets::writer::{LittleEndianWriter, SliceLittleEndianWriter};
@@ -218,14 +218,14 @@ impl Header {
     ///           .flags(SecurityFlags::PRIVACY)
     ///           .build()
     ///           .unwrap();
-    /// 
+    ///
     /// let mut buffer = [0u8; 16];
     /// let cnt = {
     ///    let mut writer = SliceLittleEndianWriter::new(buffer.as_mut_slice());
     ///    assert!(header.write(&mut writer).is_ok());
     ///    writer.written()
     /// };
-    /// 
+    ///
     /// assert_eq!(cnt, 8);
     /// assert_eq!(buffer.as_slice(), &[
     ///   0x00,                   // flags: none

@@ -421,20 +421,23 @@ impl Header {
     ///   0xb2, 0xa1,             // vendor protocol id
     ///   0xaa, 0x11, 0x00, 0x44, // Ack counter
     ///   // rest of data unchanged
-    ///   0, 0, 0, 0, 
+    ///   0, 0, 0, 0,
     /// ]);
     /// ```
     pub fn write(&self, writer: &mut impl LittleEndianWriter) -> Result<()> {
         let mut flags = self.flags.clone();
-        flags.set(ExchangeFlags::VENDOR, matches!(self.protocol_opcode, ProtocolOpCode::Vendor { ..}));
+        flags.set(
+            ExchangeFlags::VENDOR,
+            matches!(self.protocol_opcode, ProtocolOpCode::Vendor { .. }),
+        );
         flags.set(ExchangeFlags::ACKNOWLEDGEMENT, self.ack_counter.is_some());
 
         writer.write_le_u8(flags.bits())?;
         writer.write_le_u8(self.protocol_opcode.protocol_opcode())?;
         writer.write_le_u16(self.exchange.0)?;
         writer.write_le_u16(self.protocol_opcode.protocol_id())?;
-        
-        if let ProtocolOpCode::Vendor { vendor_id, ..} = self.protocol_opcode {
+
+        if let ProtocolOpCode::Vendor { vendor_id, .. } = self.protocol_opcode {
             writer.write_le_u16(vendor_id)?;
         }
 
