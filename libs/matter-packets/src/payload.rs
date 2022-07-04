@@ -2,14 +2,20 @@ use std::{error::Error, fmt::Display};
 
 use anyhow::{anyhow, Result};
 use matter_types::{ExchangeId, VendorId};
+use derive_builder::Builder;
 
-use crate::reader::LittleEndianReader;
+use crate::{reader::LittleEndianReader, writer::LittleEndianWriter};
 
 /// an error when parsing a protocol
 #[derive(PartialEq, Debug)]
 pub enum ProtocolOpCodeError {
     UnknownProtocolId,
     UnknownOpCode,
+}
+
+pub trait ProtocolInfo {
+   fn protocol_id(&self) -> u16; 
+   fn protocol_opcode(&self) -> u8; 
 }
 
 impl Display for ProtocolOpCodeError {
@@ -25,7 +31,7 @@ impl Error for ProtocolOpCodeError {}
 
 /// Opcodes specific to secure channel
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum SecureChannelOpcode {
     MessageCounterSyncRequest = 0x00,
     MessageCounterSyncResponse = 0x01,
@@ -67,7 +73,7 @@ impl TryFrom<u8> for SecureChannelOpcode {
 
 /// Opcodes specific to interaction model
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum InteractionModelOpcode {
     StatusResponse = 0x01,
     ReadRequest = 0x02,
@@ -102,7 +108,7 @@ impl TryFrom<u8> for InteractionModelOpcode {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BdxOpcode {
     SendInit = 0x01,
     SendAccept = 0x02,
@@ -138,7 +144,7 @@ impl TryFrom<u8> for BdxOpcode {
 
 /// Opcodes specific to user directed commissioning
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum UserDirectedCommissioningOpcode {
     IdentificationDeclaration = 0x00,
 }
@@ -154,7 +160,7 @@ impl TryFrom<u8> for UserDirectedCommissioningOpcode {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ProtocolOpCode {
     SecureChannel(SecureChannelOpcode),
     InteractionModel(InteractionModelOpcode),
@@ -163,16 +169,6 @@ pub enum ProtocolOpCode {
 }
 
 impl ProtocolOpCode {
-    /// Return the underlying protocol id for the given opcode
-    pub fn protocol_id(&self) -> u8 {
-        match self {
-            ProtocolOpCode::SecureChannel(_) => 0,
-            ProtocolOpCode::InteractionModel(_) => 1,
-            ProtocolOpCode::Bdx(_) => 2,
-            ProtocolOpCode::UserDirectedCommissioning(_) => 3,
-        }
-    }
-
     /// parse a tuple of protocol id and opcode id and return the underlying known opcode value.
     pub fn from_id_and_opcode(
         raw_protocol_id: u16,
@@ -194,6 +190,38 @@ impl ProtocolOpCode {
     }
 }
 
+impl ProtocolInfo for ProtocolOpCode {
+    /// Return the underlying protocol id for the given opcode
+    fn protocol_id(&self) -> u16 {
+        match self {
+            ProtocolOpCode::SecureChannel(_) => 0,
+            ProtocolOpCode::InteractionModel(_) => 1,
+            ProtocolOpCode::Bdx(_) => 2,
+            ProtocolOpCode::UserDirectedCommissioning(_) => 3,
+        }
+    }
+
+    /// Fetch the protocol opcode for the given protocol
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use matter_packets::payload::{ProtocolOpCode, SecureChannelOpcode, BdxOpcode, ProtocolInfo};
+    /// 
+    /// assert_eq!(ProtocolOpCode::Bdx(BdxOpcode::BlockEOF).protocol_opcode(), 0x12);
+    /// assert_eq!(ProtocolOpCode::SecureChannel(SecureChannelOpcode::PasePake2).protocol_opcode(), 0x23);
+    /// ```
+    fn protocol_opcode(&self) -> u8 {
+        match self {
+            ProtocolOpCode::SecureChannel(v) => *v as u8,
+            ProtocolOpCode::InteractionModel(v) => *v as u8,
+            ProtocolOpCode::Bdx(v) => *v as u8,
+            ProtocolOpCode::UserDirectedCommissioning(v) => *v as u8,
+        }
+    }
+
+}
+
 bitflags::bitflags! {
     /// Represents security flags within the message header
     pub struct ExchangeFlags: u8 {
@@ -202,6 +230,12 @@ bitflags::bitflags! {
        const RELIABILITY = 0b_0000_0100;
        const SECURED_EXTENSIONS = 0b_0000_1000;
        const VENDOR = 0b_0001_0000;
+    }
+}
+
+impl Default for ExchangeFlags {
+    fn default() -> Self {
+        ExchangeFlags::empty()
     }
 }
 
@@ -220,12 +254,20 @@ bitflags::bitflags! {
 /// | `0/u32`        | (Optional) Ack counter                    |
 /// | `u16 + (len)`  | (Optional) u16-length prefixed extensions |
 /// | *              | Payload                                   |
+#[derive(Builder, Debug, Clone, Copy)]
 pub struct Header {
+    #[builder(default)]
     pub flags: ExchangeFlags,
-    pub protocol_opcode: ProtocolOpCode,
+
     /// contains both protocol id and opcode
+    pub protocol_opcode: ProtocolOpCode,
+
     pub exchange: ExchangeId,
+
+    #[builder(default)]
     pub vendor_id: Option<VendorId>,
+
+    #[builder(default)]
     pub ack_counter: Option<u32>,
 }
 
@@ -289,5 +331,57 @@ impl Header {
             vendor_id,
             ack_counter,
         })
+    }
+
+    /// Writes a header to the given endian writer
+    /// 
+    /// # Example
+    ///
+    /// ```
+    /// use matter_packets::{payload::{self, *}, writer::*};
+    /// use matter_types::*;
+    ///
+    /// let header = payload::HeaderBuilder::default()
+    ///     .protocol_opcode(ProtocolOpCode::SecureChannel(SecureChannelOpcode::PasePake2))
+    ///     .exchange(ExchangeId(123))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let mut buffer = [0u8; 10];
+    /// let cnt = {
+    ///    let mut writer = SliceLittleEndianWriter::new(buffer.as_mut_slice());
+    ///    assert!(header.write(&mut writer).is_ok());
+    ///    writer.written()
+    /// };
+    /// 
+    /// assert_eq!(cnt, 6);
+    /// assert_eq!(buffer.as_slice(), &[
+    ///   0x00,       // no flags
+    ///   0x23,       // PAKE2
+    ///   123, 0,     // Exchange id
+    ///   0x00, 0x00, // Secure channel protocol
+    ///   // rest of data unchanged
+    ///   0, 0, 0, 0 
+    /// ]);
+    /// ```
+    pub fn write(&self, writer: &mut impl LittleEndianWriter) -> Result<()> {
+        let mut flags = self.flags.clone();
+        flags.set(ExchangeFlags::VENDOR, self.vendor_id.is_some());
+        flags.set(ExchangeFlags::ACKNOWLEDGEMENT, self.ack_counter.is_some());
+        
+        
+        writer.write_le_u8(flags.bits())?;
+        
+
+        writer.write_le_u8(self.protocol_opcode.protocol_opcode())?;
+
+        writer.write_le_u16(self.exchange.0)?;
+        writer.write_le_u16(self.protocol_opcode.protocol_id())?;
+        
+        if let Some(counter) = self.ack_counter {
+            writer.write_le_u32(counter)?;
+        }
+
+        Ok(())
     }
 }
