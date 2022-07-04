@@ -47,6 +47,7 @@ pub trait LittleEndianWriter {
     }
 }
 
+#[derive(Debug)]
 pub struct SliceLittleEndianWriter<'a> {
     buffer: &'a mut [u8],
     offset: usize,
@@ -71,6 +72,47 @@ impl<'a> LittleEndianWriter for SliceLittleEndianWriter<'a> {
         }
 
         self.buffer[self.offset..(self.offset + data.len())].copy_from_slice(data);
+        self.offset += data.len();
+        Ok(())
+    }
+}
+
+/// Implements a [LittleEndianWriter] by keeping track of
+/// how much data would be written if it would be serialized.
+/// 
+/// Discards any data written to self.
+/// 
+/// # Example
+/// 
+/// ```
+/// use matter_packets::writer::{SpaceEstimator, LittleEndianWriter};
+/// 
+/// let mut estimator = SpaceEstimator::default();
+/// 
+/// assert_eq!(estimator.written(), 0);
+/// 
+/// estimator.write_le_u32(123);
+/// assert_eq!(estimator.written(), 4);
+///
+/// estimator.write_le_u64(0xabcd);
+/// assert_eq!(estimator.written(), 12);
+///
+/// estimator.write([0;28].as_slice());
+/// assert_eq!(estimator.written(), 40);
+/// ```
+#[derive(Default, Debug)]
+pub struct SpaceEstimator {
+    offset: usize,
+}
+
+impl SpaceEstimator {
+    pub fn written(&self) -> usize {
+        self.offset
+    }
+}
+
+impl LittleEndianWriter for SpaceEstimator {
+    fn write(&mut self, data: &[u8]) -> core::result::Result<(), EndianWriteError> {
         self.offset += data.len();
         Ok(())
     }
