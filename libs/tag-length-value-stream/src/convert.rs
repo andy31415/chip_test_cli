@@ -7,7 +7,7 @@ pub enum ConversionError {
 }
 
 /// Implement the try from trait for various integer types. This allows conversion
-/// from all signed and unsigned integers (assuming conversion succeeds) into the 
+/// from all signed and unsigned integers (assuming conversion succeeds) into the
 /// underlying integer values
 macro_rules! int_convert {
     ($type:ident) => {
@@ -43,7 +43,7 @@ mod tests {
     use crate::ContainerType;
 
     use super::*;
-    
+
     #[test]
     fn integer_conversion() {
         assert_eq!(Value::Signed(1).try_into(), Ok(1u8));
@@ -72,14 +72,12 @@ mod tests {
 
         assert!(TryInto::<u64>::try_into(Value::Signed(-1)).is_err());
         assert_eq!(TryInto::<i8>::try_into(Value::Signed(-1)), Ok(-1));
-        
+
         // other types should fail
         assert!(TryInto::<u8>::try_into(Value::Bool(false)).is_err());
         assert!(TryInto::<u8>::try_into(Value::Float(0.)).is_err());
         assert!(TryInto::<u8>::try_into(Value::Null).is_err());
         assert!(TryInto::<u8>::try_into(Value::ContainerEnd).is_err());
         assert!(TryInto::<u8>::try_into(Value::ContainerStart(ContainerType::Structure)).is_err());
-        
     }
-
 }
