@@ -40,6 +40,8 @@ int_convert!(i64);
 
 #[cfg(test)]
 mod tests {
+    use crate::ContainerType;
+
     use super::*;
     
     #[test]
@@ -70,6 +72,13 @@ mod tests {
 
         assert!(TryInto::<u64>::try_into(Value::Signed(-1)).is_err());
         assert_eq!(TryInto::<i8>::try_into(Value::Signed(-1)), Ok(-1));
+        
+        // other types should fail
+        assert!(TryInto::<u8>::try_into(Value::Bool(false)).is_err());
+        assert!(TryInto::<u8>::try_into(Value::Float(0.)).is_err());
+        assert!(TryInto::<u8>::try_into(Value::Null).is_err());
+        assert!(TryInto::<u8>::try_into(Value::ContainerEnd).is_err());
+        assert!(TryInto::<u8>::try_into(Value::ContainerStart(ContainerType::Structure)).is_err());
         
     }
 
