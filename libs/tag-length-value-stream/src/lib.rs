@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod raw_types;
+pub mod convert;
 
 pub use raw_types::ContainerType;
 

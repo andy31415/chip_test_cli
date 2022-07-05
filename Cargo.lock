@@ -1067,7 +1067,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tag_length_value_stream"
+name = "tag-length-value-stream"
 version = "0.1.0"
 dependencies = [
  "byteorder",
