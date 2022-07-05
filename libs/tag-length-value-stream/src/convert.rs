@@ -40,7 +40,6 @@ int_convert!(i64);
 
 #[cfg(test)]
 mod tests {
-    use crate::raw_types::ElementDataLength;
     use super::*;
     
     #[test]
