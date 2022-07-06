@@ -259,7 +259,7 @@ impl<'a> From<&'a Vec<u8>> for Value<'a> {
 
 macro_rules! from_option_into_value {
     ($type:ty) => {
-        impl<'a> From<Option<$type>> for Value<'a>{
+        impl<'a> From<Option<$type>> for Value<'a> {
             fn from(value: Option<$type>) -> Self {
                 match value {
                     None => Value::Null,
@@ -371,6 +371,30 @@ mod tests {
             Value::Utf8(&[0xE2, 0x9D, 0xA4, 0x20, 0xF0, 0x9F, 0xA6, 0x80]).try_into(),
             Ok("❤ 🦀")
         );
+    }
+
+    #[test]
+    fn optional_support() {
+        let value: Result<Option<u8>, ConversionError> = Value::Null.try_into();
+        assert_eq!(value, Ok(None));
+
+        let value: Result<Option<String>, ConversionError> = Value::Null.try_into();
+        assert_eq!(value, Ok(None));
+
+        let value: Result<Option<&[u8]>, ConversionError> = Value::Null.try_into();
+        assert_eq!(value, Ok(None));
+
+        let value: Option<u32> = None;
+        let value: Value = value.into();
+        assert_eq!(value, Value::Null);
+
+        let value: Option<&str> = None;
+        let value: Value = value.into();
+        assert_eq!(value, Value::Null);
+
+        let value: Option<f32> = None;
+        let value: Value = value.into();
+        assert_eq!(value, Value::Null);
     }
 
     #[cfg(feature = "std")]
