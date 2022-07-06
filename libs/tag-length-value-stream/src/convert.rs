@@ -246,21 +246,17 @@ mod tests {
         );
     }
 
-#[cfg(feature = "std")]
-use alloc::vec;
+    #[cfg(feature = "std")]
+    use alloc::vec;
 
     #[cfg(feature = "std")]
     #[test]
     fn vec_conversion() {
-        assert_eq!(
-            Value::Utf8(&[97, 98, 99]).try_into(),
-            Ok(vec![97, 98, 99])
-        );
+        assert_eq!(Value::Utf8(&[97, 98, 99]).try_into(), Ok(vec![97, 98, 99]));
 
         assert_eq!(
             Value::Utf8(&[0, 0xFF, 0x80, 0xFF, 0xFF]).try_into(),
             Ok(vec![0, 0xFF, 0x80, 0xFF, 0xFF])
         );
-
     }
 }
