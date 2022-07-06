@@ -12,8 +12,8 @@ pub enum ConversionError {
 /// Implement the try from trait for various integer types. This allows conversion
 /// from all signed and unsigned integers (assuming conversion succeeds) into the
 /// underlying integer values
-macro_rules! int_convert {
-    ($type:ident) => {
+macro_rules! try_from_value_to_number {
+    ($type:ty) => {
         impl<'a> TryFrom<Value<'a>> for $type {
             type Error = ConversionError;
 
@@ -32,14 +32,14 @@ macro_rules! int_convert {
     };
 }
 
-int_convert!(u8);
-int_convert!(u16);
-int_convert!(u32);
-int_convert!(u64);
-int_convert!(i8);
-int_convert!(i16);
-int_convert!(i32);
-int_convert!(i64);
+try_from_value_to_number!(u8);
+try_from_value_to_number!(u16);
+try_from_value_to_number!(u32);
+try_from_value_to_number!(u64);
+try_from_value_to_number!(i8);
+try_from_value_to_number!(i16);
+try_from_value_to_number!(i32);
+try_from_value_to_number!(i64);
 
 impl<'a> TryFrom<Value<'a>> for bool {
     type Error = ConversionError;
@@ -169,6 +169,93 @@ try_from_for_option!(Vec<u8>);
 
 #[cfg(feature = "std")]
 try_from_for_option!(String);
+
+/* Conversions from data into value */
+
+macro_rules! from_type_to_value {
+    ($type:ty, $actual:path) => {
+        impl<'a> From<$type> for Value<'a> {
+            fn from(value: $type) -> Self {
+                $actual(value.into())
+            }
+        }
+    };
+}
+from_type_to_value!(i8, Value::Signed);
+from_type_to_value!(i16, Value::Signed);
+from_type_to_value!(i32, Value::Signed);
+from_type_to_value!(i64, Value::Signed);
+from_type_to_value!(u8, Value::Unsigned);
+from_type_to_value!(u16, Value::Unsigned);
+from_type_to_value!(u32, Value::Unsigned);
+from_type_to_value!(u64, Value::Unsigned);
+from_type_to_value!(bool, Value::Bool);
+from_type_to_value!(f32, Value::Float);
+from_type_to_value!(f64, Value::Double);
+
+/// Converts from strings into values.
+///
+/// ```
+/// use tag_length_value_stream::Value;
+/// use tag_length_value_stream::convert::*;
+///
+/// let value: Value = "😂".into();
+/// assert_eq!(value, Value::Utf8(&[240, 159, 152, 130]));
+/// ```
+impl<'a> From<&'a str> for Value<'a> {
+    fn from(value: &'a str) -> Self {
+        Value::Utf8(value.as_bytes())
+    }
+}
+
+/// Converts from bytes into values
+///
+/// ```
+/// use tag_length_value_stream::Value;
+/// use tag_length_value_stream::convert::*;
+///
+/// let value: Value = [1, 2, 3].as_slice().into();
+/// assert_eq!(value, Value::Bytes(&[1, 2, 3]));
+/// ```
+impl<'a> From<&'a [u8]> for Value<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Value::Bytes(value)
+    }
+}
+
+/// Converts from a string to a value:
+///
+/// ```
+/// use tag_length_value_stream::Value;
+/// use tag_length_value_stream::convert::*;
+///
+/// let data = String::from("ABC");
+/// let value: Value = (&data).into();
+/// assert_eq!(value, Value::Utf8(&[65, 66, 67]));
+/// ```
+#[cfg(feature = "std")]
+impl<'a> From<&'a String> for Value<'a> {
+    fn from(value: &'a String) -> Self {
+        Value::Utf8(value.as_bytes())
+    }
+}
+
+/// Converts from a vector to a value:
+///
+/// ```
+/// use tag_length_value_stream::Value;
+/// use tag_length_value_stream::convert::*;
+///
+/// let data = vec![1u8, 2u8, 3u8];
+/// let value: Value = (&data).into();
+/// assert_eq!(value, Value::Bytes(&[1, 2, 3]));
+/// ```
+#[cfg(feature = "std")]
+impl<'a> From<&'a Vec<u8>> for Value<'a> {
+    fn from(value: &'a Vec<u8>) -> Self {
+        Value::Bytes(value.as_slice())
+    }
+}
 
 #[cfg(test)]
 mod tests {
