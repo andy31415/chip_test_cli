@@ -95,6 +95,10 @@ impl<'a> TryFrom<Value<'a>> for String {
     type Error = ConversionError;
 
     fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        if !matches!(value, Value::Utf8(_)) {
+            return Err(ConversionError::InvalidType);
+        }
+        
         Ok(String::from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
     }
 }
