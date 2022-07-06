@@ -257,6 +257,38 @@ impl<'a> From<&'a Vec<u8>> for Value<'a> {
     }
 }
 
+macro_rules! from_option_into_value {
+    ($type:ty) => {
+        impl<'a> From<Option<$type>> for Value<'a>{
+            fn from(value: Option<$type>) -> Self {
+                match value {
+                    None => Value::Null,
+                    x => x.into(),
+                }
+            }
+        }
+    };
+}
+
+from_option_into_value!(i8);
+from_option_into_value!(i16);
+from_option_into_value!(i32);
+from_option_into_value!(i64);
+from_option_into_value!(u8);
+from_option_into_value!(u16);
+from_option_into_value!(u32);
+from_option_into_value!(u64);
+from_option_into_value!(f32);
+from_option_into_value!(f64);
+from_option_into_value!(&str);
+from_option_into_value!(&[u8]);
+
+#[cfg(feature = "std")]
+from_option_into_value!(&String);
+
+#[cfg(feature = "std")]
+from_option_into_value!(&Vec<u8>);
+
 #[cfg(test)]
 mod tests {
     use crate::ContainerType;
