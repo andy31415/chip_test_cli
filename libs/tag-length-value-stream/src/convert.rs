@@ -194,5 +194,8 @@ mod tests {
         assert!(TryInto::<u8>::try_into(Value::Null).is_err());
         assert!(TryInto::<u8>::try_into(Value::ContainerEnd).is_err());
         assert!(TryInto::<u8>::try_into(Value::ContainerStart(ContainerType::Structure)).is_err());
+
+        assert_eq!(TryInto::<Option<u8>>::try_into(Value::Null), Ok(None));
+        assert_eq!(TryInto::<Option<i32>>::try_into(Value::Null), Ok(None));
     }
 }
