@@ -291,8 +291,8 @@ from_option_into_value!(&Vec<u8>);
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use crate::ContainerType;
-
     use super::*;
 
     #[test]
