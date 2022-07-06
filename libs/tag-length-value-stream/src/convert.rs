@@ -4,6 +4,7 @@ use crate::Value;
 pub enum ConversionError {
     InvalidType,
     ConversionFailed,
+    InvalidUtf8,
 }
 
 /// Implement the try from trait for various integer types. This allows conversion
@@ -37,6 +38,70 @@ int_convert!(i8);
 int_convert!(i16);
 int_convert!(i32);
 int_convert!(i64);
+
+impl<'a> TryFrom<Value<'a>> for bool {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(value) => Ok(value),
+            _ => Err(ConversionError::InvalidType),
+        }
+    }
+}
+
+impl<'a> TryFrom<Value<'a>> for f32 {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Float(value) => Ok(value),
+            _ => Err(ConversionError::InvalidType),
+        }
+    }
+}
+
+impl<'a> TryFrom<Value<'a>> for f64 {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Double(value) => Ok(value),
+            _ => Err(ConversionError::InvalidType),
+        }
+    }
+}
+
+impl<'a> TryFrom<Value<'a>> for &'a [u8] {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(value) => Ok(value),
+            Value::Utf8(value) => Ok(value),
+            _ => Err(ConversionError::InvalidType),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+use alloc::string::String;
+
+#[cfg(feature = "std")]
+impl<'a> TryFrom<Value<'a>> for String {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Utf8(value) => Ok(String::from_utf8(value.into())
+                .map_err(|_| ConversionError::InvalidUtf8)?),
+            _ => Err(ConversionError::InvalidType),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
