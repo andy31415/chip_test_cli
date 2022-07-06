@@ -1,3 +1,5 @@
+use core::str::from_utf8;
+
 use crate::Value;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -90,6 +92,18 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use alloc::string::String;
 
+impl<'a> TryFrom<Value<'a>> for &'a str {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        if !matches!(value, Value::Utf8(_)) {
+            return Err(ConversionError::InvalidType);
+        }
+
+        Ok(from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
+    }
+}
+
 #[cfg(feature = "std")]
 impl<'a> TryFrom<Value<'a>> for String {
     type Error = ConversionError;
@@ -99,7 +113,8 @@ impl<'a> TryFrom<Value<'a>> for String {
             return Err(ConversionError::InvalidType);
         }
 
-        Ok(String::from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
+        let value: &str = value.try_into()?;
+        Ok(String::from(value))
     }
 }
 
@@ -215,6 +230,16 @@ mod tests {
         assert_eq!(
             Value::Utf8(&[97, 98, 99]).try_into(),
             Ok(String::from("abc"))
+        );
+
+        assert_eq!(
+            Value::Utf8(&[0xF0, 0x9F, 0xA6, 0x80]).try_into(),
+            Ok(String::from("🦀"))
+        );
+
+        assert_eq!(
+            Value::Utf8(&[0xE2, 0x9D, 0xA4, 0x20, 0xF0, 0x9F, 0xA6, 0x80]).try_into(),
+            Ok("❤ 🦀")
         );
     }
 }
