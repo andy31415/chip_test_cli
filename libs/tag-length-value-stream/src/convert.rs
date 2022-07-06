@@ -86,12 +86,6 @@ impl<'a> TryFrom<Value<'a>> for &'a [u8] {
     }
 }
 
-#[cfg(feature = "std")]
-extern crate alloc;
-
-#[cfg(feature = "std")]
-use alloc::string::String;
-
 impl<'a> TryFrom<Value<'a>> for &'a str {
     type Error = ConversionError;
 
@@ -103,6 +97,12 @@ impl<'a> TryFrom<Value<'a>> for &'a str {
         Ok(from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
     }
 }
+
+#[cfg(feature = "std")]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+use alloc::string::String;
 
 #[cfg(feature = "std")]
 impl<'a> TryFrom<Value<'a>> for String {
@@ -214,7 +214,6 @@ mod tests {
         assert_eq!(TryInto::<Option<i32>>::try_into(Value::Null), Ok(None));
     }
 
-    #[cfg(feature = "std")]
     #[test]
     fn bytes_conversion() {
         assert_eq!(
@@ -228,6 +227,15 @@ mod tests {
         );
 
         assert_eq!(
+            Value::Utf8(&[0xE2, 0x9D, 0xA4, 0x20, 0xF0, 0x9F, 0xA6, 0x80]).try_into(),
+            Ok("❤ 🦀")
+        );
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn std_string_conversion() {
+        assert_eq!(
             Value::Utf8(&[97, 98, 99]).try_into(),
             Ok(String::from("abc"))
         );
@@ -236,10 +244,23 @@ mod tests {
             Value::Utf8(&[0xF0, 0x9F, 0xA6, 0x80]).try_into(),
             Ok(String::from("🦀"))
         );
+    }
+
+#[cfg(feature = "std")]
+use alloc::vec;
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn vec_conversion() {
+        assert_eq!(
+            Value::Utf8(&[97, 98, 99]).try_into(),
+            Ok(vec![97, 98, 99])
+        );
 
         assert_eq!(
-            Value::Utf8(&[0xE2, 0x9D, 0xA4, 0x20, 0xF0, 0x9F, 0xA6, 0x80]).try_into(),
-            Ok("❤ 🦀")
+            Value::Utf8(&[0, 0xFF, 0x80, 0xFF, 0xFF]).try_into(),
+            Ok(vec![0, 0xFF, 0x80, 0xFF, 0xFF])
         );
+
     }
 }
