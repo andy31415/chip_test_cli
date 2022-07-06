@@ -95,13 +95,27 @@ impl<'a> TryFrom<Value<'a>> for String {
     type Error = ConversionError;
 
     fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        Ok(String::from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
+    }
+}
+
+#[cfg(feature = "std")]
+use alloc::vec::Vec;
+
+#[cfg(feature = "std")]
+impl<'a> TryFrom<Value<'a>> for Vec<u8> {
+    type Error = ConversionError;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
         match value {
-            Value::Utf8(value) => Ok(String::from_utf8(value.into())
-                .map_err(|_| ConversionError::InvalidUtf8)?),
+            Value::Bytes(value) => Ok(value.into()),
+            Value::Utf8(value) => Ok(value.into()),
             _ => Err(ConversionError::InvalidType),
         }
     }
 }
+
+
 
 #[cfg(test)]
 mod tests {
