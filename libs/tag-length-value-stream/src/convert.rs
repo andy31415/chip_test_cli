@@ -98,7 +98,7 @@ impl<'a> TryFrom<Value<'a>> for String {
         if !matches!(value, Value::Utf8(_)) {
             return Err(ConversionError::InvalidType);
         }
-        
+
         Ok(String::from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
     }
 }
@@ -119,7 +119,39 @@ impl<'a> TryFrom<Value<'a>> for Vec<u8> {
     }
 }
 
+macro_rules! try_from_for_option {
+    ($type:ty) => {
+        impl<'a> TryFrom<Value<'a>> for Option<$type> {
+            type Error = ConversionError;
 
+            fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+                if matches!(value, Value::Null) {
+                    return Ok(None);
+                }
+
+                Ok(Some(value.try_into()?))
+            }
+        }
+    };
+}
+
+try_from_for_option!(u8);
+try_from_for_option!(u16);
+try_from_for_option!(u32);
+try_from_for_option!(u64);
+try_from_for_option!(i8);
+try_from_for_option!(i16);
+try_from_for_option!(i32);
+try_from_for_option!(i64);
+try_from_for_option!(f32);
+try_from_for_option!(f64);
+try_from_for_option!(&'a [u8]);
+
+#[cfg(feature = "std")]
+try_from_for_option!(Vec<u8>);
+
+#[cfg(feature = "std")]
+try_from_for_option!(String);
 
 #[cfg(test)]
 mod tests {
