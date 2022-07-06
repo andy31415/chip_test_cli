@@ -198,4 +198,23 @@ mod tests {
         assert_eq!(TryInto::<Option<u8>>::try_into(Value::Null), Ok(None));
         assert_eq!(TryInto::<Option<i32>>::try_into(Value::Null), Ok(None));
     }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn bytes_conversion() {
+        assert_eq!(
+            Value::Bytes(&[97, 98, 99]).try_into(),
+            Ok([97, 98, 99].as_slice())
+        );
+
+        assert_eq!(
+            Value::Utf8(&[97, 98, 99]).try_into(),
+            Ok([97, 98, 99].as_slice())
+        );
+
+        assert_eq!(
+            Value::Utf8(&[97, 98, 99]).try_into(),
+            Ok(String::from("abc"))
+        );
+    }
 }
