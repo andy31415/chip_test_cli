@@ -68,6 +68,8 @@ impl<'a> TryFrom<Value<'a>> for f64 {
 
     fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
         match value {
+            // f32 should not lose precision when converted to f64
+            Value::Float(value) => Ok(value.into()),
             Value::Double(value) => Ok(value),
             _ => Err(ConversionError::InvalidType),
         }
@@ -212,6 +214,26 @@ mod tests {
 
         assert_eq!(TryInto::<Option<u8>>::try_into(Value::Null), Ok(None));
         assert_eq!(TryInto::<Option<i32>>::try_into(Value::Null), Ok(None));
+    }
+
+    #[test]
+    fn bool_conversion() {
+        assert_eq!(Value::Bool(true).try_into(), Ok(true));
+        assert_eq!(Value::Bool(false).try_into(), Ok(false));
+
+        assert!(TryInto::<bool>::try_into(Value::Null).is_err());
+        assert!(TryInto::<bool>::try_into(Value::Float(123.)).is_err());
+        assert!(TryInto::<bool>::try_into(Value::Double(321.)).is_err());
+    }
+
+    #[test]
+    fn float_conversion() {
+        assert_eq!(Value::Float(1.25).try_into(), Ok(1.25f32));
+        assert_eq!(Value::Double(4.5).try_into(), Ok(4.5));
+
+        assert!(TryInto::<f32>::try_into(Value::Null).is_err());
+        assert!(TryInto::<f64>::try_into(Value::ContainerStart(ContainerType::Array)).is_err());
+        assert!(TryInto::<f64>::try_into(Value::Bool(false)).is_err());
     }
 
     #[test]
