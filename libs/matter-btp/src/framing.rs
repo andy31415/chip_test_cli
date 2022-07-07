@@ -260,9 +260,11 @@ const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(15);
 /// The timeout to use to send a standalone ACK to the other side.
 const ACK_SEND_TIMEOUT: Duration = Duration::from_millis(2500);
 
-/// The maximum amount of time no unique data has been sent over
-/// a BTP session before a Central device must close the BTP session.
-const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+// TODO: IDLE timeout not yet supported, we keep the connection alive forever.
+//
+// /// The maximum amount of time no unique data has been sent over
+// /// a BTP session before a Central device must close the BTP session.
+// const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Represents the state of windowed packets for Btp
 #[derive(Debug, PartialEq, Clone)]
@@ -545,7 +547,7 @@ impl BtpWindowState {
     /// attempted whenever a new packet is received (since that may open send windows).
     pub fn prepare_send(&mut self, data: PacketData) -> Result<BtpSendData> {
         if (self.sent_packets.unacknowledged_count() != 0)
-            && (self.sent_packets.last_seen_time + IDLE_TIMEOUT < Instant::now())
+            && (self.sent_packets.last_seen_time + ACKNOWLEDGE_TIMEOUT < Instant::now())
         {
             // Expect to receive an ack within the given time window
             return Err(anyhow!("Timeout receiving data: no ack received in time"));
@@ -554,7 +556,7 @@ impl BtpWindowState {
         if self.sent_packets.unacknowledged_count() >= self.window_size {
             // The remote side has no window size for packets, cannot send any data
             return Ok(BtpSendData::Wait {
-                duration: IDLE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
+                duration: ACKNOWLEDGE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
             });
         }
 
@@ -566,7 +568,7 @@ impl BtpWindowState {
             //
             // In particular this means we will only send the last packet if it can contain an ack.
             return Ok(BtpSendData::Wait {
-                duration: IDLE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
+                duration: ACKNOWLEDGE_TIMEOUT - (Instant::now() - self.sent_packets.last_seen_time),
             });
         }
 
