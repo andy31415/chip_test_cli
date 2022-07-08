@@ -137,7 +137,6 @@ where
                         return Err(DecodeError::InvalidData);
                     }
 
-                    self.child = Default::default();
                     self.child.merge_decode(source)?
                 }
                 tlv_stream::TagValue::ContextSpecific { tag: 5 } => {
@@ -145,12 +144,13 @@ where
                         return Err(DecodeError::InvalidData);
                     }
 
-                    self.child2 = Some(Default::default());
-                    //self.child2.merge_decode(source)?;
-                    if let Some(ref mut value) = self.child2 {
-                        value.merge_decode(source)?
-                    } else {
-                        return Err(DecodeError::Internal);
+                    if self.child2 == None {
+                        self.child2 = Some(Default::default());
+                    }
+                    
+                    match self.child2 {
+                        Some(ref mut value) => value.merge_decode(source)?,
+                        None => return Err(DecodeError::Internal),
                     }
                 }
                 _ => DecodeEnd::DataConsumed, // TODO: log here?
