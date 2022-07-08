@@ -14,7 +14,7 @@ pub enum DecodeEnd {
     ContainerClosed, // stream of data returned 'ContainerEnd'
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct ChildStructure {
     some_unsigned: Option<u32>, // tag: 1
     some_signed: i16,           // tag: 2
@@ -44,7 +44,7 @@ impl<'a> ChildStructure {
                         .try_into()
                         .map_err(|_| DecodeError::InvalidData)?
                 }
-                tlv_stream::TagValue::ContextSpecific { tag: 3 } => {
+                tlv_stream::TagValue::ContextSpecific { tag: 2 } => {
                     self.some_signed = record
                         .value
                         .try_into()
@@ -164,7 +164,7 @@ impl<'a> TopStructure<'a> {
 
 #[cfg(test)]
 mod tests {
-    use tlv_stream::{Record, TagValue, Value};
+    use tlv_stream::{Record, TagValue, Value, ContainerType};
 
     use crate::TopStructure;
 
@@ -197,5 +197,75 @@ mod tests {
         assert_eq!(s.some_nr, Some(123));
         assert_eq!(s.some_str, "ABC");
         assert_eq!(s.some_signed, -2);
+    }
+
+    #[test]
+    fn nested_decode() {
+        let records = [
+            Record {
+                tag: TagValue::ContextSpecific { tag: 1 },
+                value: Value::Unsigned(123),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 2 },
+                value: Value::Utf8(&[65, 66, 67]),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 3 },
+                value: Value::Signed(-2),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 4 },
+                value: Value::ContainerStart(ContainerType::Structure)
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 1 },
+                value: Value::Unsigned(21),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 2 },
+                value: Value::Signed(-12)
+            },
+            Record {
+                tag: TagValue::Anonymous,
+                value: Value::ContainerEnd,
+            },
+        ];
+        let mut streamer = streaming_iterator::convert(records.iter().copied());
+
+        let mut s = TopStructure::decode(&mut streamer).unwrap();
+
+        assert_eq!(s.some_nr, Some(123));
+        assert_eq!(s.some_str, "ABC");
+        assert_eq!(s.some_signed, -2);
+        assert_eq!(s.child.some_signed, -12);
+        assert_eq!(s.child.some_unsigned, Some(21));
+        assert_eq!(s.child2, None);
+        
+
+        let records = [
+            Record {
+                tag: TagValue::ContextSpecific { tag: 5 },
+                value: Value::ContainerStart(ContainerType::Structure)
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 1 },
+                value: Value::Unsigned(22),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 2 },
+                value: Value::Signed(23)
+            },
+            Record {
+                tag: TagValue::Anonymous,
+                value: Value::ContainerEnd,
+            },
+        ];
+        let mut streamer = streaming_iterator::convert(records.iter().copied());
+        s.merge_decode(&mut streamer).unwrap();
+
+        assert_eq!(s.child2.unwrap().some_signed, 23);
+        assert_eq!(s.child2.unwrap().some_unsigned, Some(22));
+
     }
 }
