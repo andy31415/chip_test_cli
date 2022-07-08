@@ -10,15 +10,16 @@ pub enum DecodeError {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DecodeEnd {
-    StreamFinished,  // stream of data returned None
-    DataConsumed,    // read full value (single value or 'structure end')
+    StreamFinished, // stream of data returned None
+    DataConsumed,   // read full value (single value or 'structure end')
 }
 
-pub trait TlvDecodable<'a, Source> 
-where Source: StreamingIterator<Item = Record<'a>>,
-      Self: Sized + Default
+pub trait TlvDecodable<'a, Source>
+where
+    Source: StreamingIterator<Item = Record<'a>>,
+    Self: Sized + Default,
 {
-    fn merge_decode( &mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError>;
+    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError>;
 
     fn decode(source: &mut Source) -> Result<Self, DecodeError> {
         let mut result = Self::default();
@@ -31,18 +32,22 @@ where Source: StreamingIterator<Item = Record<'a>>,
 }
 
 /// decodes a single value from a streaming iterator.
-/// 
+///
 /// Assumes that the iterator has already been positioned to a valid location.
 impl<'a, BaseType, Source, E> TlvDecodable<'a, Source> for BaseType
-where Source: StreamingIterator<Item = Record<'a>>,
-      BaseType: std::convert::TryFrom<tlv_stream::Value<'a>, Error=E> + Sized + Default
+where
+    Source: StreamingIterator<Item = Record<'a>>,
+    BaseType: std::convert::TryFrom<tlv_stream::Value<'a>, Error = E> + Sized + Default,
 {
-    fn merge_decode( &mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
+    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
         // The decoding is assumed to be already positioned to the right location
         match source.get() {
             None => Err(DecodeError::InvalidData),
             Some(record) => {
-                *self = record.value.try_into().map_err(|_| DecodeError::InvalidData)?;
+                *self = record
+                    .value
+                    .try_into()
+                    .map_err(|_| DecodeError::InvalidData)?;
                 Ok(DecodeEnd::DataConsumed)
             }
         }
@@ -55,8 +60,9 @@ pub struct ChildStructure {
     some_signed: i16,           // tag: 2
 }
 
-impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure 
-where Source: StreamingIterator<Item = Record<'a>>,
+impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure
+where
+    Source: StreamingIterator<Item = Record<'a>>,
 {
     fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
         loop {
@@ -81,7 +87,7 @@ where Source: StreamingIterator<Item = Record<'a>>,
                 _ => DecodeEnd::DataConsumed, // TODO: should we log skipped entry?
             };
             if decoded == DecodeEnd::StreamFinished {
-               return Err(DecodeError::InvalidNesting);
+                return Err(DecodeError::InvalidNesting);
             }
         }
     }
@@ -100,9 +106,10 @@ pub struct TopStructure<'a> {
 }
 
 impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a>
-where Source: StreamingIterator<Item = Record<'a>>
+where
+    Source: StreamingIterator<Item = Record<'a>>,
 {
-    fn merge_decode( &mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
+    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
         loop {
             let record = source.next();
 
@@ -159,8 +166,8 @@ where Source: StreamingIterator<Item = Record<'a>>
 mod tests {
     use tlv_stream::{ContainerType, Record, TagValue, Value};
 
-    use crate::TopStructure;
     use crate::TlvDecodable;
+    use crate::TopStructure;
 
     #[test]
     fn decode_test() {
