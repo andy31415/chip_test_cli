@@ -11,6 +11,7 @@ pub enum DecodeError {
 pub struct TestStruct<'a> {
     some_nr: Option<u32>, // tag: 1
     some_str: &'a str,    // tag: 2
+    some_signed: i16,     // tag: 3
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -42,13 +43,19 @@ impl<'a> TestStruct<'a> {
                         .value
                         .try_into()
                         .map_err(|_| DecodeError::InvalidData)?
-                }
+                },
                 tlv_stream::TagValue::ContextSpecific { tag: 2 } => {
                     self.some_str = record
                         .value
                         .try_into()
                         .map_err(|_| DecodeError::InvalidData)?
-                }
+                },
+                tlv_stream::TagValue::ContextSpecific { tag: 3 } => {
+                    self.some_signed = record
+                        .value
+                        .try_into()
+                        .map_err(|_| DecodeError::InvalidData)?
+                },
                 _ => {
                     // TODO: log if skipping maybe
                 }
@@ -80,16 +87,21 @@ mod tests {
 
         assert_eq!(s.some_str, "");
         assert_eq!(s.some_nr, None);
+        assert_eq!(s.some_signed, 0);
         
 
         let records = [
             Record {
                 tag: TagValue::ContextSpecific { tag: 1},
-                value: Value::Unsigned(123)
+                value: Value::Unsigned(123),
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 2},
                 value: Value::Utf8(&[65, 66, 67]),
+            },
+            Record {
+                tag: TagValue::ContextSpecific { tag: 3},
+                value: Value::Signed(-2),
             },
         ];
         let mut streamer = streaming_iterator::convert(records.iter().copied());
@@ -98,5 +110,6 @@ mod tests {
         
         assert_eq!(s.some_nr, Some(123));
         assert_eq!(s.some_str, "ABC");
+        assert_eq!(s.some_signed, -2);
     }
 }
