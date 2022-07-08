@@ -164,7 +164,7 @@ impl<'a> TopStructure<'a> {
 
 #[cfg(test)]
 mod tests {
-    use tlv_stream::{Record, TagValue, Value, ContainerType};
+    use tlv_stream::{ContainerType, Record, TagValue, Value};
 
     use crate::TopStructure;
 
@@ -216,7 +216,7 @@ mod tests {
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 4 },
-                value: Value::ContainerStart(ContainerType::Structure)
+                value: Value::ContainerStart(ContainerType::Structure),
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 1 },
@@ -224,7 +224,7 @@ mod tests {
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 2 },
-                value: Value::Signed(-12)
+                value: Value::Signed(-12),
             },
             Record {
                 tag: TagValue::Anonymous,
@@ -241,12 +241,11 @@ mod tests {
         assert_eq!(s.child.some_signed, -12);
         assert_eq!(s.child.some_unsigned, Some(21));
         assert_eq!(s.child2, None);
-        
 
         let records = [
             Record {
                 tag: TagValue::ContextSpecific { tag: 5 },
-                value: Value::ContainerStart(ContainerType::Structure)
+                value: Value::ContainerStart(ContainerType::Structure),
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 1 },
@@ -254,7 +253,7 @@ mod tests {
             },
             Record {
                 tag: TagValue::ContextSpecific { tag: 2 },
-                value: Value::Signed(23)
+                value: Value::Signed(23),
             },
             Record {
                 tag: TagValue::Anonymous,
@@ -266,6 +265,5 @@ mod tests {
 
         assert_eq!(s.child2.unwrap().some_signed, 23);
         assert_eq!(s.child2.unwrap().some_unsigned, Some(22));
-
     }
 }
