@@ -2,7 +2,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use streaming_iterator::StreamingIterator;
-use tag_length_value_stream::{Parser, Record, TlvBytes, Value};
+use tlv_stream::{Parser, Record, TlvBytes, Value};
 
 /// Compare records while comparing NaN to NaN.
 fn check_same(a: Option<Record>, b: Option<Record>) {

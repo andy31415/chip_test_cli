@@ -114,8 +114,8 @@ impl TagValue {
     /// Gets the corresponding control bits to represent this tag value
     ///
     /// ```
-    /// # use tag_length_value_stream::TagValue;
-    /// # use tag_length_value_stream::raw_types::TagType;
+    /// # use tlv_stream::TagValue;
+    /// # use tlv_stream::raw_types::TagType;
     ///
     /// assert_eq!(TagValue::Anonymous.tag_type(), TagType::Anonymous);
     /// assert_eq!(TagValue::ContextSpecific{tag: 123}.tag_type(), TagType::ContextSpecific1byte);
@@ -253,7 +253,7 @@ pub(crate) struct IncrementalParseResult<'a, T> {
 /// Parsing a valid stream:
 ///
 /// ```
-/// use tag_length_value_stream::{Record, Parser, TagValue, Value, ContainerType};
+/// use tlv_stream::{Record, Parser, TagValue, Value, ContainerType};
 ///
 /// let mut parser = Parser::new(&[
 ///     0xD5, 0xBB, 0xAA, 0xDD, 0xCC, 0x01, 0x00,  // tag: 0xAABB/0xCCDD/1, structure start
@@ -292,7 +292,7 @@ pub(crate) struct IncrementalParseResult<'a, T> {
 /// Parsing an invalid stream (tag terminated early)
 ///
 /// ```
-/// use tag_length_value_stream::{Record, Parser, TagValue, Value, ContainerType};
+/// use tlv_stream::{Record, Parser, TagValue, Value, ContainerType};
 ///
 /// let mut parser = Parser::new(&[
 ///     0xD5, 0xBB, 0xAA, 0xDD, 0xCC, 0x01, 0x00,  // tag: 0xAABB/0xCCDD/1, structure start
@@ -595,7 +595,7 @@ impl TemporaryBytesStore {
 /// into the corresponding sequence of bytes.
 ///
 /// ```
-/// # use tag_length_value_stream::{*, raw_types::*};
+/// # use tlv_stream::{*, raw_types::*};
 /// # use streaming_iterator::*;
 ///
 /// let records = [

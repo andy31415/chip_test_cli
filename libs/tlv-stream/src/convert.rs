@@ -196,8 +196,8 @@ from_type_to_value!(f64, Value::Double);
 /// Converts from strings into values.
 ///
 /// ```
-/// use tag_length_value_stream::Value;
-/// use tag_length_value_stream::convert::*;
+/// use tlv_stream::Value;
+/// use tlv_stream::convert::*;
 ///
 /// let value: Value = "😂".into();
 /// assert_eq!(value, Value::Utf8(&[240, 159, 152, 130]));
@@ -211,8 +211,8 @@ impl<'a> From<&'a str> for Value<'a> {
 /// Converts from bytes into values
 ///
 /// ```
-/// use tag_length_value_stream::Value;
-/// use tag_length_value_stream::convert::*;
+/// use tlv_stream::Value;
+/// use tlv_stream::convert::*;
 ///
 /// let value: Value = [1, 2, 3].as_slice().into();
 /// assert_eq!(value, Value::Bytes(&[1, 2, 3]));
@@ -226,8 +226,8 @@ impl<'a> From<&'a [u8]> for Value<'a> {
 /// Converts from a string to a value:
 ///
 /// ```
-/// use tag_length_value_stream::Value;
-/// use tag_length_value_stream::convert::*;
+/// use tlv_stream::Value;
+/// use tlv_stream::convert::*;
 ///
 /// let data = String::from("ABC");
 /// let value: Value = (&data).into();
@@ -243,8 +243,8 @@ impl<'a> From<&'a String> for Value<'a> {
 /// Converts from a vector to a value:
 ///
 /// ```
-/// use tag_length_value_stream::Value;
-/// use tag_length_value_stream::convert::*;
+/// use tlv_stream::Value;
+/// use tlv_stream::convert::*;
 ///
 /// let data = vec![1u8, 2u8, 3u8];
 /// let value: Value = (&data).into();

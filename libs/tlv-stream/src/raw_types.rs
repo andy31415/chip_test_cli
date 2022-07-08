@@ -123,7 +123,7 @@ impl ElementType {
     /// use an 'end of container' tag to delimit them.
     ///
     /// ```
-    /// # use tag_length_value_stream::raw_types::*;
+    /// # use tlv_stream::raw_types::*;
     ///
     /// assert!(ElementType::Utf8String(ElementDataLength::Bytes2).is_sized_data());
     /// assert!(ElementType::ByteString(ElementDataLength::Bytes4).is_sized_data());
@@ -144,7 +144,7 @@ impl ElementType {
     /// Returns an option if the control type is not known.
     ///
     /// ```
-    /// # use tag_length_value_stream::raw_types::*;
+    /// # use tlv_stream::raw_types::*;
     ///
     /// assert_eq!(ElementType::for_control(0), Some(ElementType::Signed(ElementDataLength::Bytes1)));
     /// assert_eq!(ElementType::for_control(1), Some(ElementType::Signed(ElementDataLength::Bytes2)));
@@ -210,7 +210,7 @@ impl TagType {
     /// The bitmask is already shifted
     ///
     /// ```
-    /// # use tag_length_value_stream::raw_types::TagType;
+    /// # use tlv_stream::raw_types::TagType;
     ///
     /// assert_eq!(TagType::Anonymous.get_control_byte_bits(), 0b0000_0000);
     /// assert_eq!(TagType::ContextSpecific1byte.get_control_byte_bits(), 0b0010_0000);
@@ -242,7 +242,7 @@ impl TagType {
     /// Returns an option if the control type is not known.
     ///
     /// ```
-    /// use tag_length_value_stream::raw_types::*;
+    /// use tlv_stream::raw_types::*;
     ///
     /// assert_eq!(TagType::for_control(0), TagType::Anonymous);
     /// assert_eq!(TagType::for_control(0b0001_1111), TagType::Anonymous); // only upper bits matter

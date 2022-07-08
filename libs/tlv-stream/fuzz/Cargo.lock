@@ -44,7 +44,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "303235c177994a476226b80d076bd333b7b560fb05bd242a10609d11b07f81f5"
 
 [[package]]
-name = "tag_length_value_stream"
+name = "tlv_stream"
 version = "0.1.0"
 dependencies = [
  "byteorder",
@@ -52,10 +52,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tag_length_value_stream-fuzz"
+name = "tlv_stream-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "streaming-iterator",
- "tag_length_value_stream",
+ "tlv_stream",
 ]
