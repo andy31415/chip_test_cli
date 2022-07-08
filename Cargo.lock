@@ -1209,6 +1209,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tlv-structs"
+version = "0.1.0"
+dependencies = [
+ "streaming-iterator",
+ "tlv-stream",
+]
+
+[[package]]
 name = "tokio"
 version = "1.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
