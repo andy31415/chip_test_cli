@@ -1,34 +1,39 @@
-use streaming_iterator::StreamingIterator;
+use streaming_iterator::{convert, StreamingIterator};
 use tlv_stream::{ContainerType, Record, Value};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum DecodeError {
+enum DecodeError {
     InvalidData,    // failed to decode some data
     InvalidNesting, // mismatched start/end structures
     Internal,       // Internal logic error, should not happen
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DecodeEnd {
+enum DecodeEnd {
     StreamFinished, // stream of data returned None
     DataConsumed,   // read full value (single value or 'structure end')
 }
 
-pub trait TlvDecodable<'a, Source>
+trait TlvDecodable<'a, Source>
 where
     Source: StreamingIterator<Item = Record<'a>>,
     Self: Sized + Default,
 {
+    /// Merge-decode the current value.
+    ///
+    /// Arguments:
+    ///
+    /// * `source` is the iterator that MUST have been advanced to the current record
+    ///   to decode. Decoding ignores the current tag, but will validate the data.
+    ///
+    /// Notes:
+    ///   - `source` MUST have been already advanced via `next`
+    ///   - For containers (structures, lists, arrays), source MUST end up with a
+    ///     Container end otherwise it is considered an error.
+    ///
+    ///
+    ///
     fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError>;
-
-    fn decode(source: &mut Source) -> Result<Self, DecodeError> {
-        let mut result = Self::default();
-        if result.merge_decode(source)? != DecodeEnd::StreamFinished {
-            // Unexpected container closed within the data
-            return Err(DecodeError::InvalidNesting);
-        }
-        Ok(result)
-    }
 }
 
 /// decodes a single value from a streaming iterator.
@@ -55,18 +60,100 @@ where
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
-pub struct ChildStructure {
+struct ChildStructure {
     some_unsigned: Option<u32>, // tag: 1
     some_signed: i16,           // tag: 2
 }
+
+fn wrap_structure<'a, Source>(source: Source) -> impl StreamingIterator<Item = Record<'a>>
+where
+    Source: StreamingIterator<Item = Record<'a>>,
+{
+    let strucure_begin = convert([Record {
+        tag: tlv_stream::TagValue::Anonymous,
+        value: Value::ContainerStart(ContainerType::Structure),
+    }]);
+
+    let structure_end = convert([Record {
+        tag: tlv_stream::TagValue::Anonymous,
+        value: Value::ContainerEnd,
+    }]);
+
+    let mut source = strucure_begin.chain(source).chain(structure_end).fuse();
+    source.next();
+
+    source
+}
+
+impl ChildStructure {
+    /// Decodes the current value from a stream
+    ///
+    /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
+    /// automatically)
+    pub fn decode<'sr, Source>(source: &mut Source) -> Result<Self, DecodeError>
+    where
+        Source: StreamingIterator<Item = Record<'sr>>,
+    {
+        let mut result = Self::default();
+
+        let strucure_begin = convert([Record {
+            tag: tlv_stream::TagValue::Anonymous,
+            value: Value::ContainerStart(ContainerType::Structure),
+        }]);
+
+        let structure_end = convert([Record {
+            tag: tlv_stream::TagValue::Anonymous,
+            value: Value::ContainerEnd,
+        }]);
+
+        let mut source = wrap_structure(source);
+
+        match result.merge_decode(&mut source)? {
+            DecodeEnd::StreamFinished => Err(DecodeError::InvalidNesting),
+            DecodeEnd::DataConsumed => match source.next() {
+                Some(_) => Err(DecodeError::InvalidNesting),
+                None => Ok(result),
+            },
+        }
+    }
+}
+
+/*
+impl<'a, Source> TlvDecodable<'a, Source> for ::core::option::Option<ChildStructure>
+where
+    Source: StreamingIterator<Item = Record<'a>>
+{
+    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
+        if matches!(self, None) {
+            *self = Some(Default::default())
+        }
+
+        match self {
+            Some(ref mut value) => value.merge_decode(source)?,
+            None => return Err(DecodeError::Internal), // this should NEVER happen
+        }
+    }
+}
+*/
 
 impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure
 where
     Source: StreamingIterator<Item = Record<'a>>,
 {
     fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
+        if !matches!(
+            source.get(),
+            Some(Record {
+                tag: _,
+                value: Value::ContainerStart(ContainerType::Structure)
+            })
+        ) {
+            dbg!("INVALID DATA");
+            return Err(DecodeError::InvalidData);
+        }
+
         loop {
-            let record = source.next();
+            let record = dbg!(source.next());
 
             let record = match record {
                 None => return Ok(DecodeEnd::StreamFinished),
@@ -94,7 +181,7 @@ where
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub struct TopStructure<'a> {
+struct TopStructure<'a> {
     some_nr: Option<u32>, // tag: 1
     some_str: &'a str,    // tag: 2
     some_signed: i16,     // tag: 3
@@ -105,13 +192,58 @@ pub struct TopStructure<'a> {
                            // TODO: array or list ?
 }
 
+impl<'a> TopStructure<'a> {
+    /// Decodes the current value from a stream
+    ///
+    /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
+    /// automatically)
+    pub fn decode<Source>(source: &mut Source) -> Result<Self, DecodeError>
+    where
+        Source: StreamingIterator<Item = Record<'a>>,
+    {
+        let mut result = Self::default();
+
+        let strucure_begin = convert([Record {
+            tag: tlv_stream::TagValue::Anonymous,
+            value: Value::ContainerStart(ContainerType::Structure),
+        }]);
+
+        let structure_end = convert([Record {
+            tag: tlv_stream::TagValue::Anonymous,
+            value: Value::ContainerEnd,
+        }]);
+
+        let mut source = strucure_begin.chain(source).chain(structure_end).fuse();
+        source.next(); // MUST be positioned on start
+
+        match result.merge_decode(&mut source)? {
+            DecodeEnd::StreamFinished => Err(DecodeError::InvalidNesting),
+            DecodeEnd::DataConsumed => match source.next() {
+                Some(_) => Err(DecodeError::InvalidNesting),
+                None => Ok(result),
+            },
+        }
+    }
+}
+
 impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a>
 where
     Source: StreamingIterator<Item = Record<'a>>,
 {
     fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
+        if !matches!(
+            source.get(),
+            Some(Record {
+                tag: _,
+                value: Value::ContainerStart(ContainerType::Structure)
+            })
+        ) {
+            dbg!("INVALID DATA");
+            return Err(DecodeError::InvalidData);
+        }
+
         loop {
-            let record = source.next();
+            let record = dbg!(source.next());
 
             let record = match record {
                 None => return Ok(DecodeEnd::StreamFinished),
@@ -133,21 +265,13 @@ where
                     self.some_signed.merge_decode(source)?
                 }
                 tlv_stream::TagValue::ContextSpecific { tag: 4 } => {
-                    if record.value != Value::ContainerStart(ContainerType::Structure) {
-                        return Err(DecodeError::InvalidData);
-                    }
-
                     self.child.merge_decode(source)?
                 }
                 tlv_stream::TagValue::ContextSpecific { tag: 5 } => {
-                    if record.value != Value::ContainerStart(ContainerType::Structure) {
-                        return Err(DecodeError::InvalidData);
-                    }
-
                     if self.child2 == None {
                         self.child2 = Some(Default::default());
                     }
-                    
+
                     match self.child2 {
                         Some(ref mut value) => value.merge_decode(source)?,
                         None => return Err(DecodeError::Internal),
@@ -261,7 +385,7 @@ mod tests {
                 value: Value::ContainerEnd,
             },
         ];
-        let mut streamer = streaming_iterator::convert(records.iter().copied());
+        let mut streamer = super::wrap_structure(streaming_iterator::convert(records.iter().copied()));
         s.merge_decode(&mut streamer).unwrap();
 
         assert_eq!(s.child2.unwrap().some_signed, 23);
