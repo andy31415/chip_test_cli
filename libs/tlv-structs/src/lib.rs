@@ -95,17 +95,6 @@ impl ChildStructure {
         Source: StreamingIterator<Item = Record<'sr>>,
     {
         let mut result = Self::default();
-
-        let strucure_begin = convert([Record {
-            tag: tlv_stream::TagValue::Anonymous,
-            value: Value::ContainerStart(ContainerType::Structure),
-        }]);
-
-        let structure_end = convert([Record {
-            tag: tlv_stream::TagValue::Anonymous,
-            value: Value::ContainerEnd,
-        }]);
-
         let mut source = wrap_structure(source);
 
         match result.merge_decode(&mut source)? {
@@ -202,19 +191,7 @@ impl<'a> TopStructure<'a> {
         Source: StreamingIterator<Item = Record<'a>>,
     {
         let mut result = Self::default();
-
-        let strucure_begin = convert([Record {
-            tag: tlv_stream::TagValue::Anonymous,
-            value: Value::ContainerStart(ContainerType::Structure),
-        }]);
-
-        let structure_end = convert([Record {
-            tag: tlv_stream::TagValue::Anonymous,
-            value: Value::ContainerEnd,
-        }]);
-
-        let mut source = strucure_begin.chain(source).chain(structure_end).fuse();
-        source.next(); // MUST be positioned on start
+        let mut source = wrap_structure(source);
 
         match result.merge_decode(&mut source)? {
             DecodeEnd::StreamFinished => Err(DecodeError::InvalidNesting),
@@ -385,7 +362,8 @@ mod tests {
                 value: Value::ContainerEnd,
             },
         ];
-        let mut streamer = super::wrap_structure(streaming_iterator::convert(records.iter().copied()));
+        let mut streamer =
+            super::wrap_structure(streaming_iterator::convert(records.iter().copied()));
         s.merge_decode(&mut streamer).unwrap();
 
         assert_eq!(s.child2.unwrap().some_signed, 23);
