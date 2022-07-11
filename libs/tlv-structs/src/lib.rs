@@ -137,12 +137,11 @@ where
                 value: Value::ContainerStart(ContainerType::Structure)
             })
         ) {
-            dbg!("INVALID DATA");
             return Err(DecodeError::InvalidData);
         }
 
         loop {
-            let record = dbg!(source.next());
+            let record = source.next();
 
             let record = match record {
                 None => return Ok(DecodeEnd::StreamFinished),
@@ -215,12 +214,11 @@ where
                 value: Value::ContainerStart(ContainerType::Structure)
             })
         ) {
-            dbg!("INVALID DATA");
             return Err(DecodeError::InvalidData);
         }
 
         loop {
-            let record = dbg!(source.next());
+            let record = source.next();
 
             let record = match record {
                 None => return Ok(DecodeEnd::StreamFinished),
