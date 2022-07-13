@@ -282,7 +282,7 @@ where
 
 fn parse_u32_match(m: Option<Match>) -> anyhow::Result<u32> {
     let value = m
-        .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
+        .ok_or_else(|| anyhow::anyhow!("Unable to capture number"))?
         .as_str();
 
     let value = if value.starts_with("0x") {
@@ -296,7 +296,7 @@ fn parse_u32_match(m: Option<Match>) -> anyhow::Result<u32> {
 
 fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
     let value = m
-        .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
+        .ok_or_else(|| anyhow::anyhow!("Unable to capture number"))?
         .as_str();
 
     let value = if value.starts_with("0x") {
@@ -320,11 +320,11 @@ fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
 fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     lazy_static! {
         static ref RE_CONTEXT: Regex =
-            Regex::new("^(?i)context:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
+            Regex::new(r"^(?i)context:\s*(\d+|0x[a-fA-F0-9]+)$").unwrap();
         static ref RE_IMPLICIT: Regex =
-            Regex::new("^(?i)implicit:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
+            Regex::new(r"^(?i)implicit:\s*(\d+|0x[a-fA-F0-9]+)$").unwrap();
         static ref RE_FULL: Regex = Regex::new(
-            "^(?i)full:\\s*((\\d+|0x[a-fA-F0-9]+)-(\\d+|0x[a-fA-F0-9]+)-)?(\\d+|0x[a-fA-F0-9]+)$"
+            r"^(?i)full:\s*(?:(\d+|0x[a-fA-F0-9]+)-(\d+|0x[a-fA-F0-9]+)-)?(\d+|0x[a-fA-F0-9]+)$"
         )
         .unwrap();
     }
@@ -354,11 +354,11 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
         .into());
     }
     if let Some(captures) = RE_FULL.captures(tag) {
-        let tag = parse_u32_match(captures.get(4))?;
+        let tag = parse_u32_match(captures.get(3))?;
 
         if captures.get(1).is_some() {
-            let vendor_id = parse_u16_match(captures.get(2))?;
-            let profile_id = parse_u16_match(captures.get(3))?;
+            let vendor_id = parse_u16_match(captures.get(1))?;
+            let profile_id = parse_u16_match(captures.get(2))?;
 
             return Ok(quote! {
                 ::tlv_stream::TagValue::Full { vendor_id: #vendor_id, profile_id: #profile_id, tag: #tag}
