@@ -293,6 +293,9 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     lazy_static! {
         static ref RE_CONTEXT: Regex =
             Regex::new("^(?i)context:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
+
+        static ref RE_IMPLICIT: Regex =
+            Regex::new("^(?i)implicit:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
     }
     
     if tag.eq_ignore_ascii_case("anonymous") {
@@ -316,6 +319,24 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 
         return Ok(quote! {
             ::tlv_stream::TagValue::ContextSpecific { tag: #tag}
+        }
+        .into());
+    }
+
+    if let Some(captures) = RE_IMPLICIT.captures(tag) {
+        let tag = captures
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?
+            .as_str();
+
+        let tag = if tag.starts_with("0x") {
+            u32::from_str_radix(&tag[2..], 16)?
+        } else {
+            tag.parse::<u32>()?
+        };
+
+        return Ok(quote! {
+            ::tlv_stream::TagValue::Implicit { tag: #tag}
         }
         .into());
     }
@@ -349,6 +370,12 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 /// assert_eq!(
 ///     into_parsed_tag_value!("context: 0xabcd"),
 ///     TagValue::ContextSpecific { tag: 0xabcd }
+/// );
+///
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("implicit: 0x1234"),
+///     TagValue::Implicit { tag: 0x1234 }
 /// );
 ///
 /// assert_eq!(
