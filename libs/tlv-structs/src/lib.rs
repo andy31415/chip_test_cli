@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use quote::quote;
-use regex::Regex;
+use regex::{Match, Regex};
 use streaming_iterator::{convert, StreamingIterator};
 use syn::ExprLit;
 use tlv_stream::{ContainerType, Record, Value};
@@ -280,10 +280,38 @@ where
     }
 }
 
+fn parse_u32_match(m: Option<Match>) -> anyhow::Result<u32> {
+    let value = m
+        .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
+        .as_str();
+
+    let value = if value.starts_with("0x") {
+        u32::from_str_radix(&value[2..], 16)?
+    } else {
+        value.parse::<u32>()?
+    };
+
+    Ok(value)
+}
+
+fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
+    let value = m
+        .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
+        .as_str();
+
+    let value = if value.starts_with("0x") {
+        u16::from_str_radix(&value[2..], 16)?
+    } else {
+        value.parse::<u16>()?
+    };
+
+    Ok(value)
+}
+
 
 /// Parses a string tag value into an underlying
 /// [::tlvstream::TagValue] that can be used for macro generation
-/// 
+///
 /// Valid syntax examples:
 ///   - "context: 123"
 ///   - "context: 0xabc"
@@ -293,11 +321,14 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     lazy_static! {
         static ref RE_CONTEXT: Regex =
             Regex::new("^(?i)context:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
-
         static ref RE_IMPLICIT: Regex =
             Regex::new("^(?i)implicit:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
+        static ref RE_FULL: Regex = Regex::new(
+            "^(?i)full:\\s*((\\d+|0x[a-fA-F0-9]+)-(\\d+|0x[a-fA-F0-9]+)-)?(\\d+|0x[a-fA-F0-9]+)$"
+        )
+        .unwrap();
     }
-    
+
     if tag.eq_ignore_ascii_case("anonymous") {
         return Ok(quote! {
             ::tlv_stream::TagValue::Anonymous
@@ -306,16 +337,7 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     }
 
     if let Some(captures) = RE_CONTEXT.captures(tag) {
-        let tag = captures
-            .get(1)
-            .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
-            .as_str();
-
-        let tag = if tag.starts_with("0x") {
-            u32::from_str_radix(&tag[2..], 16)?
-        } else {
-            tag.parse::<u32>()?
-        };
+        let tag = parse_u32_match(captures.get(1))?;
 
         return Ok(quote! {
             ::tlv_stream::TagValue::ContextSpecific { tag: #tag}
@@ -324,21 +346,29 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     }
 
     if let Some(captures) = RE_IMPLICIT.captures(tag) {
-        let tag = captures
-            .get(1)
-            .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
-            .as_str();
-
-        let tag = if tag.starts_with("0x") {
-            u32::from_str_radix(&tag[2..], 16)?
-        } else {
-            tag.parse::<u32>()?
-        };
+        let tag = parse_u32_match(captures.get(1))?;
 
         return Ok(quote! {
             ::tlv_stream::TagValue::Implicit { tag: #tag}
         }
         .into());
+    }
+    if let Some(captures) = RE_FULL.captures(tag) {
+        let tag = parse_u32_match(captures.get(4))?;
+
+        if captures.get(1).is_some() {
+            let vendor_id = parse_u16_match(captures.get(2))?;
+            let profile_id = parse_u16_match(captures.get(3))?;
+
+            return Ok(quote! {
+                ::tlv_stream::TagValue::Full { vendor_id: #vendor_id, profile_id: #profile_id, tag: #tag}
+            }.into());
+        } else {
+            return Ok(quote! {
+                ::tlv_stream::TagValue::Full { vendor_id: 0, profile_id: 0, tag: #tag}
+            }
+            .into());
+        }
     }
 
     return Err(anyhow::anyhow!("Invalid tag syntax: '{}'", tag));
@@ -372,7 +402,6 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 ///     TagValue::ContextSpecific { tag: 0xabcd }
 /// );
 ///
-///
 /// assert_eq!(
 ///     into_parsed_tag_value!("implicit: 0x1234"),
 ///     TagValue::Implicit { tag: 0x1234 }
@@ -387,10 +416,20 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 ///     into_parsed_tag_value!("ANONYMOUS"),
 ///     TagValue::Anonymous
 /// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("full: 1234"),
+///     TagValue::Full { vendor_id: 0, profile_id: 0, tag: 1234 }
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("full: 0x1122-1-0x1234"),
+///     TagValue::Full { vendor_id: 0x1122, profile_id: 1, tag: 0x1234 }
+/// );
 /// ```
-/// 
+///
 /// It invalid values are passed, the parsing will panic
-/// 
+///
 /// ```compile_fail
 /// use tlv_structs::into_parsed_tag_value;
 /// into_parsed_tag_value!("something else");
