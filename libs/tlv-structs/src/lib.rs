@@ -320,11 +320,11 @@ fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
 fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     lazy_static! {
         static ref RE_CONTEXT: Regex =
-            Regex::new(r"^(?i)context:\s*(\d+|0x[a-fA-F0-9]+)$").unwrap();
+            Regex::new(r"^(?i)context:\s*(\d+|0x[[:xdigit:]]+)$").unwrap();
         static ref RE_IMPLICIT: Regex =
-            Regex::new(r"^(?i)implicit:\s*(\d+|0x[a-fA-F0-9]+)$").unwrap();
+            Regex::new(r"^(?i)implicit:\s*(\d+|0x[[:xdigit:]]+)$").unwrap();
         static ref RE_FULL: Regex = Regex::new(
-            r"^(?i)full:\s*(?:(\d+|0x[a-fA-F0-9]+)-(\d+|0x[a-fA-F0-9]+)-)?(\d+|0x[a-fA-F0-9]+)$"
+            r"^(?i)full:\s*(?:(\d+|0x[[:xdigit:]]+)-(\d+|0x[[:xdigit:]]+)-)?(\d+|0x[[:xdigit:]]+)$"
         )
         .unwrap();
     }
