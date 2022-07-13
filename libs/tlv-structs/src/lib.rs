@@ -1,5 +1,10 @@
+use lazy_static::lazy_static;
+use proc_macro::{TokenStream};
+use regex::Regex;
 use streaming_iterator::{convert, StreamingIterator};
+use syn::ExprLit;
 use tlv_stream::{ContainerType, Record, Value};
+use quote::quote;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum DecodeError {
@@ -276,6 +281,44 @@ where
         }
     }
 }
+
+// TODO: string to tlv_stream? Need some form of tag or something
+//    - if writing code, need code
+//    - if compiling, need tests
+
+
+fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
+    lazy_static! {
+        static ref RE_CONTEXT: Regex = Regex::new("context:\\s*(\\d*)").unwrap();
+    }
+    
+    if let Some(captures) = RE_CONTEXT.captures(tag) {
+        let tag = captures.get(1).ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?.as_str();
+
+        // TODO: hex value decode and regex?
+        // 
+
+        let tag = tag.parse::<u32>()?;
+            
+        return Ok(quote! {
+            ::tlv_stream::TagValue::ContextSpecific { tag: #tag}
+        }.into());
+    }
+    
+    return Err(anyhow::anyhow!("Invalid tag syntax: {}", tag));
+}
+
+#[proc_macro]
+pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
+    
+    let item: ExprLit = syn::parse(input).unwrap();
+    
+    match item.lit {
+        syn::Lit::Str(s) => parse_tag_value(s.value().as_str()).unwrap(),
+        _ => panic!("Need a string literal to parse"),
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

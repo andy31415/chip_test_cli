@@ -96,7 +96,7 @@ impl<'a> TryFrom<Value<'a>> for &'a str {
             return Err(ConversionError::InvalidType);
         }
 
-        Ok(from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)?)
+        from_utf8(value.try_into()?).map_err(|_| ConversionError::InvalidUtf8)
     }
 }
 
