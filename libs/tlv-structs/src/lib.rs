@@ -294,6 +294,13 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
         static ref RE_CONTEXT: Regex =
             Regex::new("^(?i)context:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
     }
+    
+    if tag.eq_ignore_ascii_case("anonymous") {
+        return Ok(quote! {
+            ::tlv_stream::TagValue::Anonymous
+        }
+        .into());
+    }
 
     if let Some(captures) = RE_CONTEXT.captures(tag) {
         let tag = captures
@@ -342,6 +349,16 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 /// assert_eq!(
 ///     into_parsed_tag_value!("context: 0xabcd"),
 ///     TagValue::ContextSpecific { tag: 0xabcd }
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("Anonymous"),
+///     TagValue::Anonymous
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("ANONYMOUS"),
+///     TagValue::Anonymous
 /// );
 /// ```
 /// 
