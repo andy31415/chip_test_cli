@@ -308,7 +308,7 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     if let Some(captures) = RE_CONTEXT.captures(tag) {
         let tag = captures
             .get(1)
-            .ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?
+            .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
             .as_str();
 
         let tag = if tag.starts_with("0x") {
@@ -326,7 +326,7 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     if let Some(captures) = RE_IMPLICIT.captures(tag) {
         let tag = captures
             .get(1)
-            .ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?
+            .ok_or_else(|| anyhow::anyhow!("Unable to capture context number"))?
             .as_str();
 
         let tag = if tag.starts_with("0x") {
