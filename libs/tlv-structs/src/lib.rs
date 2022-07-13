@@ -14,10 +14,10 @@ enum DecodeEnd {
     DataConsumed,   // read full value (single value or 'structure end')
 }
 
-trait TlvDecodable<'a, Source>
+trait TlvMergeDecodable<'a, Source>
 where
     Source: StreamingIterator<Item = Record<'a>>,
-    Self: Sized + Default,
+    Self: Default,
 {
     /// Merge-decode the current value.
     ///
@@ -36,10 +36,24 @@ where
     fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError>;
 }
 
+trait TlvDecodable<'a, Source>
+where
+    Source: StreamingIterator<Item = Record<'a>>,
+    Self: Sized
+{
+    /// Decode the current value from a stream
+    ///
+    /// Arguments:
+    ///
+    /// * `source` is the iterator that is NOT advanced yet.
+    ///   Iterator data MUST NOT be enclosed by start/end structure
+    fn decode(source: &mut Source) -> Result<Self, DecodeError>;
+}
+
 /// decodes a single value from a streaming iterator.
 ///
 /// Assumes that the iterator has already been positioned to a valid location.
-impl<'a, BaseType, Source, E> TlvDecodable<'a, Source> for BaseType
+impl<'a, BaseType, Source, E> TlvMergeDecodable<'a, Source> for BaseType
 where
     Source: StreamingIterator<Item = Record<'a>>,
     BaseType: std::convert::TryFrom<tlv_stream::Value<'a>, Error = E> + Sized + Default,
@@ -85,14 +99,15 @@ where
     source
 }
 
-impl ChildStructure {
+impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure 
+where
+    Source: StreamingIterator<Item = Record<'a>>
+{
     /// Decodes the current value from a stream
     ///
     /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
     /// automatically)
-    pub fn decode<'sr, Source>(source: &mut Source) -> Result<Self, DecodeError>
-    where
-        Source: StreamingIterator<Item = Record<'sr>>,
+    fn decode(source: &mut Source) -> Result<Self, DecodeError>
     {
         let mut result = Self::default();
         let mut source = wrap_structure(source);
@@ -108,7 +123,7 @@ impl ChildStructure {
 }
 
 /*
-impl<'a, Source> TlvDecodable<'a, Source> for ::core::option::Option<ChildStructure>
+impl<'a, Source> TlvMergeDecodable<'a, Source> for ::core::option::Option<ChildStructure>
 where
     Source: StreamingIterator<Item = Record<'a>>
 {
@@ -125,7 +140,7 @@ where
 }
 */
 
-impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure
+impl<'a, Source> TlvMergeDecodable<'a, Source> for ChildStructure
 where
     Source: StreamingIterator<Item = Record<'a>>,
 {
@@ -180,14 +195,15 @@ struct TopStructure<'a> {
                            // TODO: array or list ?
 }
 
-impl<'a> TopStructure<'a> {
+impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a> 
+where
+    Source: StreamingIterator<Item = Record<'a>>
+{
     /// Decodes the current value from a stream
     ///
     /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
     /// automatically)
-    pub fn decode<Source>(source: &mut Source) -> Result<Self, DecodeError>
-    where
-        Source: StreamingIterator<Item = Record<'a>>,
+    fn decode(source: &mut Source) -> Result<Self, DecodeError>
     {
         let mut result = Self::default();
         let mut source = wrap_structure(source);
@@ -202,7 +218,7 @@ impl<'a> TopStructure<'a> {
     }
 }
 
-impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a>
+impl<'a, Source> TlvMergeDecodable<'a, Source> for TopStructure<'a>
 where
     Source: StreamingIterator<Item = Record<'a>>,
 {
@@ -265,8 +281,7 @@ where
 mod tests {
     use tlv_stream::{ContainerType, Record, TagValue, Value};
 
-    use crate::TlvDecodable;
-    use crate::TopStructure;
+    use crate::{TopStructure, TlvDecodable, TlvMergeDecodable};
 
     #[test]
     fn decode_test() {
