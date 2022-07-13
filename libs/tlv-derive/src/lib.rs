@@ -3,80 +3,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use regex::{Match, Regex};
 use streaming_iterator::{convert, StreamingIterator};
-use syn::ExprLit;
+use syn::{ExprLit, parse_macro_input, DeriveInput};
 use tlv_stream::{ContainerType, Record, Value};
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum DecodeError {
-    InvalidData,    // failed to decode some data
-    InvalidNesting, // mismatched start/end structures
-    Internal,       // Internal logic error, should not happen
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum DecodeEnd {
-    StreamFinished, // stream of data returned None
-    DataConsumed,   // read full value (single value or 'structure end')
-}
-
-trait TlvMergeDecodable<'a, Source>
-where
-    Source: StreamingIterator<Item = Record<'a>>,
-    Self: Default,
-{
-    /// Merge-decode the current value.
-    ///
-    /// Arguments:
-    ///
-    /// * `source` is the iterator that MUST have been advanced to the current record
-    ///   to decode. Decoding ignores the current tag, but will validate the data.
-    ///
-    /// Notes:
-    ///   - `source` MUST have been already advanced via `next`
-    ///   - For containers (structures, lists, arrays), source MUST end up with a
-    ///     Container end otherwise it is considered an error.
-    ///
-    ///
-    ///
-    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError>;
-}
-
-trait TlvDecodable<'a, Source>
-where
-    Source: StreamingIterator<Item = Record<'a>>,
-    Self: Sized,
-{
-    /// Decode the current value from a stream
-    ///
-    /// Arguments:
-    ///
-    /// * `source` is the iterator that is NOT advanced yet.
-    ///   Iterator data MUST NOT be enclosed by start/end structure
-    fn decode(source: &mut Source) -> Result<Self, DecodeError>;
-}
-
-/// decodes a single value from a streaming iterator.
-///
-/// Assumes that the iterator has already been positioned to a valid location.
-impl<'a, BaseType, Source, E> TlvMergeDecodable<'a, Source> for BaseType
-where
-    Source: StreamingIterator<Item = Record<'a>>,
-    BaseType: std::convert::TryFrom<tlv_stream::Value<'a>, Error = E> + Sized + Default,
-{
-    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
-        // The decoding is assumed to be already positioned to the right location
-        match source.get() {
-            None => Err(DecodeError::InvalidData),
-            Some(record) => {
-                *self = record
-                    .value
-                    .try_into()
-                    .map_err(|_| DecodeError::InvalidData)?;
-                Ok(DecodeEnd::DataConsumed)
-            }
-        }
-    }
-}
+use tlv_packed::{TlvMergeDecodable, TlvDecodable, DecodeEnd, DecodeError};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 struct ChildStructure {
@@ -379,7 +308,7 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 /// Generally used for internal testing of parsing metadata strings
 ///
 /// ```
-/// use tlv_structs::into_parsed_tag_value;
+/// use tlv_derive::into_parsed_tag_value;
 /// use tlv_stream::TagValue;
 ///
 /// assert_eq!(
@@ -431,12 +360,12 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 /// It invalid values are passed, the parsing will panic
 ///
 /// ```compile_fail
-/// use tlv_structs::into_parsed_tag_value;
+/// use tlv_derive::into_parsed_tag_value;
 /// into_parsed_tag_value!("something else");
 /// ```
 ///
 /// ```compile_fail
-/// use tlv_structs::into_parsed_tag_value;
+/// use tlv_derive::into_parsed_tag_value;
 /// into_parsed_tag_value!("context: notahexvalue");
 /// ```
 ///
@@ -448,6 +377,24 @@ pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
         syn::Lit::Str(s) => parse_tag_value(s.value().as_str()).unwrap(),
         _ => panic!("Need a string literal to parse"),
     }
+}
+
+#[proc_macro_derive(TlvMergeDecodable)]
+pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let name = dbg!(input).ident;
+
+    quote! {
+        impl<'a, Source> ::tlv_packed::TlvMergeDecodable<'a, Source> for #name
+        where
+            Source: ::streaming_iterator::StreamingIterator<Item = ::tlv_stream::Record<'a>>,
+        {
+            fn merge_decode(&mut self, source: &mut Source) -> ::core::result::Result<::tlv_packed::DecodeEnd, ::tlv_packed::DecodeError> {
+                todo!();
+            }
+        }
+    }.into()
 }
 
 #[cfg(test)]

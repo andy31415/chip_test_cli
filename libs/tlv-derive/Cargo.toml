@@ -1,5 +1,5 @@
 [package]
-name = "tlv-structs"
+name = "tlv-derive"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,8 +9,9 @@ proc-macro = true
 
 [dependencies]
 tlv-stream = { path = "../tlv-stream" }
+tlv-packed = { path = "../tlv-packed" }
 streaming-iterator = { version = "0.1.5", default-features = false }
-syn = { version = "1.0.98", features = ["derive"] }
+syn = { version = "1.0.98", features = ["derive", "extra-traits"] }
 quote = "1.0.20"
 regex = "1.6.0"
 anyhow = "1.0.58"

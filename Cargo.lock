@@ -1206,16 +1206,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tlv-stream"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "pretty_assertions",
- "streaming-iterator",
-]
-
-[[package]]
-name = "tlv-structs"
+name = "tlv-derive"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1225,6 +1216,38 @@ dependencies = [
  "regex",
  "streaming-iterator",
  "syn",
+ "tlv-packed",
+ "tlv-stream",
+]
+
+[[package]]
+name = "tlv-packed"
+version = "0.1.0"
+dependencies = [
+ "streaming-iterator",
+ "tlv-stream",
+]
+
+[[package]]
+name = "tlv-stream"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "pretty_assertions",
+ "streaming-iterator",
+]
+
+[[package]]
+name = "tlv_struct_test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "pretty_env_logger",
+ "regex",
+ "streaming-iterator",
+ "tlv-derive",
+ "tlv-packed",
  "tlv-stream",
 ]
 
