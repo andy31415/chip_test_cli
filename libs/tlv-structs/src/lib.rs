@@ -344,6 +344,19 @@ fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
 ///     TagValue::ContextSpecific { tag: 0xabcd }
 /// );
 /// ```
+/// 
+/// It invalid values are passed, the parsing will panic
+/// 
+/// ```compile_fail
+/// use tlv_structs::into_parsed_tag_value;
+/// into_parsed_tag_value!("something else");
+/// ```
+///
+/// ```compile_fail
+/// use tlv_structs::into_parsed_tag_value;
+/// into_parsed_tag_value!("context: notahexvalue");
+/// ```
+///
 #[proc_macro]
 pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
     let item: ExprLit = syn::parse(input).unwrap();
