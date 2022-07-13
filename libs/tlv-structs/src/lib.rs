@@ -1,10 +1,10 @@
 use lazy_static::lazy_static;
-use proc_macro::{TokenStream};
+use proc_macro::TokenStream;
+use quote::quote;
 use regex::Regex;
 use streaming_iterator::{convert, StreamingIterator};
 use syn::ExprLit;
 use tlv_stream::{ContainerType, Record, Value};
-use quote::quote;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum DecodeError {
@@ -44,7 +44,7 @@ where
 trait TlvDecodable<'a, Source>
 where
     Source: StreamingIterator<Item = Record<'a>>,
-    Self: Sized
+    Self: Sized,
 {
     /// Decode the current value from a stream
     ///
@@ -104,16 +104,15 @@ where
     source
 }
 
-impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure 
+impl<'a, Source> TlvDecodable<'a, Source> for ChildStructure
 where
-    Source: StreamingIterator<Item = Record<'a>>
+    Source: StreamingIterator<Item = Record<'a>>,
 {
     /// Decodes the current value from a stream
     ///
     /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
     /// automatically)
-    fn decode(source: &mut Source) -> Result<Self, DecodeError>
-    {
+    fn decode(source: &mut Source) -> Result<Self, DecodeError> {
         let mut result = Self::default();
         let mut source = wrap_structure(source);
 
@@ -200,16 +199,15 @@ struct TopStructure<'a> {
                            // TODO: array or list ?
 }
 
-impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a> 
+impl<'a, Source> TlvDecodable<'a, Source> for TopStructure<'a>
 where
-    Source: StreamingIterator<Item = Record<'a>>
+    Source: StreamingIterator<Item = Record<'a>>,
 {
     /// Decodes the current value from a stream
     ///
     /// `source` MUST NOT be wrapped in structure start/end already (decoding does this
     /// automatically)
-    fn decode(source: &mut Source) -> Result<Self, DecodeError>
-    {
+    fn decode(source: &mut Source) -> Result<Self, DecodeError> {
         let mut result = Self::default();
         let mut source = wrap_structure(source);
 
@@ -282,49 +280,85 @@ where
     }
 }
 
-// TODO: string to tlv_stream? Need some form of tag or something
-//    - if writing code, need code
-//    - if compiling, need tests
 
-
+/// Parses a string tag value into an underlying
+/// [::tlvstream::TagValue] that can be used for macro generation
+/// 
+/// Valid syntax examples:
+///   - "context: 123"
+///   - "context: 0xabc"
+///   - "CONTEXt: 22"
+///
 fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
     lazy_static! {
-        static ref RE_CONTEXT: Regex = Regex::new("context:\\s*(\\d*)").unwrap();
+        static ref RE_CONTEXT: Regex =
+            Regex::new("^(?i)context:\\s*(\\d+|0x[a-fA-F0-9]+)$").unwrap();
     }
-    
+
     if let Some(captures) = RE_CONTEXT.captures(tag) {
-        let tag = captures.get(1).ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?.as_str();
+        let tag = captures
+            .get(1)
+            .ok_or_else(|| anyhow::anyhow!("Unalbe to capture context number"))?
+            .as_str();
 
-        // TODO: hex value decode and regex?
-        // 
+        let tag = if tag.starts_with("0x") {
+            u32::from_str_radix(&tag[2..], 16)?
+        } else {
+            tag.parse::<u32>()?
+        };
 
-        let tag = tag.parse::<u32>()?;
-            
         return Ok(quote! {
             ::tlv_stream::TagValue::ContextSpecific { tag: #tag}
-        }.into());
+        }
+        .into());
     }
-    
-    return Err(anyhow::anyhow!("Invalid tag syntax: {}", tag));
+
+    return Err(anyhow::anyhow!("Invalid tag syntax: '{}'", tag));
 }
 
+/// Converts strings from tag value.
+///
+/// Generally used for internal testing of parsing metadata strings
+///
+/// ```
+/// use tlv_structs::into_parsed_tag_value;
+/// use tlv_stream::TagValue;
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("CONTEXT:123"),
+///     TagValue::ContextSpecific { tag: 123 }
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("context: 22"),
+///     TagValue::ContextSpecific { tag: 22 }
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("context: 0x12"),
+///     TagValue::ContextSpecific { tag: 18 }
+/// );
+///
+/// assert_eq!(
+///     into_parsed_tag_value!("context: 0xabcd"),
+///     TagValue::ContextSpecific { tag: 0xabcd }
+/// );
+/// ```
 #[proc_macro]
 pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
-    
     let item: ExprLit = syn::parse(input).unwrap();
-    
+
     match item.lit {
         syn::Lit::Str(s) => parse_tag_value(s.value().as_str()).unwrap(),
         _ => panic!("Need a string literal to parse"),
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use tlv_stream::{ContainerType, Record, TagValue, Value};
 
-    use crate::{TopStructure, TlvDecodable, TlvMergeDecodable};
+    use crate::{TlvDecodable, TlvMergeDecodable, TopStructure};
 
     #[test]
     fn decode_test() {

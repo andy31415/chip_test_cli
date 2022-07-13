@@ -1,5 +1,5 @@
 
-use tlv_structs::{into_parsed_tag_value};
+use tlv_structs::into_parsed_tag_value;
 use tlv_stream::TagValue;
 
 #[test]
