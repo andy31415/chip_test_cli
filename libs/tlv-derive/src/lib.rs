@@ -3,9 +3,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use regex::{Match, Regex};
 use streaming_iterator::{convert, StreamingIterator};
-use syn::{ExprLit, parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, ExprLit};
+use tlv_packed::{DecodeEnd, DecodeError, TlvDecodable, TlvMergeDecodable};
 use tlv_stream::{ContainerType, Record, Value};
-use tlv_packed::{TlvMergeDecodable, TlvDecodable, DecodeEnd, DecodeError};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 struct ChildStructure {
@@ -237,7 +237,6 @@ fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
     Ok(value)
 }
 
-
 /// Parses a string tag value into an underlying
 /// [::tlvstream::TagValue] that can be used for macro generation
 ///
@@ -391,7 +390,37 @@ pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
             Source: ::streaming_iterator::StreamingIterator<Item = ::tlv_stream::Record<'a>>,
         {
             fn merge_decode(&mut self, source: &mut Source) -> ::core::result::Result<::tlv_packed::DecodeEnd, ::tlv_packed::DecodeError> {
-                todo!();
+                if !std::matches!(
+                    source.get(),
+                    ::core::option::Option::Some(::tlv_stream::Record {
+                        tag: _,
+                        value: ::tlv_stream::Value::ContainerStart(::tlv_stream::ContainerType::Structure)
+                    })
+                ) {
+                    return ::core::result::Result::Err(::tlv_packed::DecodeError::InvalidData);
+                }
+                
+                loop {
+                    let record = source.next();
+
+                    let record = match record {
+                        ::core::option::Option::None => return ::core::result::Result::Ok(::tlv_packed::DecodeEnd::StreamFinished),
+                        ::core::option::Option::Some(::tlv_stream::Record {
+                            tag: _,
+                            value: ::tlv_stream::Value::ContainerEnd,
+                        }) => return ::core::result::Result::Ok(::tlv_packed::DecodeEnd::DataConsumed),
+                        ::core::option::Option::Some(value) => value,
+                    };
+
+                    let decoded = match record.tag {
+                        // TODO: add maching logic here
+                        _ => ::tlv_packed::DecodeEnd::DataConsumed, // TODO: log here?
+                    };
+
+                    if decoded != ::tlv_packed::DecodeEnd::DataConsumed {
+                        return ::core::result::Result::Err(::tlv_packed::DecodeError::InvalidNesting);
+                    }
+                }
             }
         }
     }.into()
