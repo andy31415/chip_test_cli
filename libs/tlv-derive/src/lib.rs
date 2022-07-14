@@ -423,7 +423,6 @@ fn extract_tag_value(attrs: impl IntoIterator<Item=Attribute>) -> proc_macro2::T
 #[derive(Debug)]
 struct StructFieldInfo {
     ident: Ident,
-    ty: Type,
     tag_value: proc_macro2::TokenStream,
 }
 
@@ -432,6 +431,9 @@ impl StructFieldInfo
     pub fn decode_match(&self) -> proc_macro2::TokenStream {
        let tag = self.tag_value.clone();
        let ident = self.ident.clone();
+       
+       // TODO: we may want to detect Option and have default code
+       //       logic for that.
        quote!{
            #tag => {
                
@@ -446,7 +448,6 @@ impl From<syn::Field> for StructFieldInfo {
     fn from(f: syn::Field) -> Self {
         Self { 
             ident: f.ident.unwrap(), 
-            ty: f.ty,
             tag_value: extract_tag_value(f.attrs),
         }
     }
