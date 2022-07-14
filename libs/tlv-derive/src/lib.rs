@@ -1,9 +1,10 @@
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
+use proc_macro2::{Punct, Literal, TokenTree};
 use quote::quote;
 use regex::{Match, Regex};
 use streaming_iterator::{convert, StreamingIterator};
-use syn::{parse_macro_input, DeriveInput, ExprLit};
+use syn::{parse_macro_input, DeriveInput, ExprLit, Fields, Data, Type, Ident, Attribute, Path};
 use tlv_packed::{DecodeEnd, DecodeError, TlvDecodable, TlvMergeDecodable};
 use tlv_stream::{ContainerType, Record, Value};
 
@@ -245,7 +246,7 @@ fn parse_u16_match(m: Option<Match>) -> anyhow::Result<u16> {
 ///   - "context: 0xabc"
 ///   - "CONTEXt: 22"
 ///
-fn parse_tag_value(tag: &str) -> Result<TokenStream, anyhow::Error> {
+fn parse_tag_value(tag: &str) -> Result<proc_macro2::TokenStream, anyhow::Error> {
     lazy_static! {
         static ref RE_CONTEXT: Regex =
             Regex::new(r"^(?i)context:\s*(\d+|0x[[:xdigit:]]+)$").unwrap();
@@ -373,17 +374,106 @@ pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
     let item: ExprLit = syn::parse(input).unwrap();
 
     match item.lit {
-        syn::Lit::Str(s) => parse_tag_value(s.value().as_str()).unwrap(),
+        syn::Lit::Str(s) => parse_tag_value(s.value().as_str()).unwrap().into(),
         _ => panic!("Need a string literal to parse"),
     }
 }
 
-#[proc_macro_derive(TlvMergeDecodable)]
+fn extract_tag_value(attrs: impl IntoIterator<Item=Attribute>) -> proc_macro2::TokenStream {
+    
+    for a in attrs.into_iter() {
+        let Path{segments,..} = a.path;
+        
+        if segments.len() != 1 {
+            continue;
+        }
+
+        if segments.first().unwrap().ident.to_string() != "tlv_tag" {
+            continue;
+        }
+        
+        let mut iter = a.tokens.into_iter();
+        let v = match iter.next() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        
+        if !matches!(v, TokenTree::Punct(ref p) if p.as_char() == '=') {
+            continue;
+        }
+        let v = match iter.next() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        if let TokenTree::Literal(ref l) = v {
+            let tag: String = l.to_string().parse().unwrap();
+            
+            // Tag includes quotes, like "\"context: 1\""
+
+            return parse_tag_value(&tag[1..tag.len()-1]).unwrap()
+        }
+    }
+
+    
+    panic!("Missing tag value. Please add an attribute like `#[tlv_tag=\"context:1\"`")
+}
+
+#[derive(Debug)]
+struct StructFieldInfo {
+    ident: Ident,
+    ty: Type,
+    tag_value: proc_macro2::TokenStream,
+}
+
+impl StructFieldInfo
+{
+    pub fn decode_match(&self) -> proc_macro2::TokenStream {
+       let tag = self.tag_value.clone();
+       let ident = self.ident.clone();
+       quote!{
+           #tag => {
+               
+                self.#ident.merge_decode(source)?
+           } ,
+       }
+    }
+}
+
+        
+impl From<syn::Field> for StructFieldInfo {
+    fn from(f: syn::Field) -> Self {
+        Self { 
+            ident: f.ident.unwrap(), 
+            ty: f.ty,
+            tag_value: extract_tag_value(f.attrs),
+        }
+    }
+}
+
+#[proc_macro_derive(TlvMergeDecodable, attributes(tlv_tag))]
 pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let name = dbg!(input).ident;
-
+    let name = input.ident;
+    
+    let fields = match input.data {
+        Data::Struct(ref data) => {
+            match data.fields {
+                Fields::Named(ref fields) => {
+                    fields.named.clone()
+                },
+                _ => panic!("Fields need to be named in structure"),
+            }
+        },
+        _ => panic!("Derive only supported for structures"),
+    };
+    
+    let fields: Vec<_> = fields.into_iter().map(|item| {
+        StructFieldInfo::from(item).decode_match()
+    }).collect();
+    
     quote! {
         impl<'a, Source> ::tlv_packed::TlvMergeDecodable<'a, Source> for #name
         where
@@ -413,7 +503,7 @@ pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
                     };
 
                     let decoded = match record.tag {
-                        // TODO: add maching logic here
+                        #(#fields)*
                         _ => ::tlv_packed::DecodeEnd::DataConsumed, // TODO: log here?
                     };
 
