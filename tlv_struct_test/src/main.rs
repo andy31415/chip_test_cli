@@ -9,7 +9,7 @@ struct Test {
     #[tlv_tag="context:2"]
     more_nr: u16,
 
-    #[tlv_tag="context: 0xabcd"]
+    #[tlv_tag="full: 0xabcd"]
     opt_nr: Option<u32>,
 }
 

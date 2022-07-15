@@ -1,10 +1,10 @@
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
-use proc_macro2::{Punct, Literal, TokenTree};
+use proc_macro2::TokenTree;
 use quote::quote;
 use regex::{Match, Regex};
 use streaming_iterator::{convert, StreamingIterator};
-use syn::{parse_macro_input, DeriveInput, ExprLit, Fields, Data, Type, Ident, Attribute, Path};
+use syn::{parse_macro_input, DeriveInput, ExprLit, Fields, Data, Ident, Attribute, Path};
 use tlv_packed::{DecodeEnd, DecodeError, TlvDecodable, TlvMergeDecodable};
 use tlv_stream::{ContainerType, Record, Value};
 
@@ -417,7 +417,7 @@ fn extract_tag_value(attrs: impl IntoIterator<Item=Attribute>) -> proc_macro2::T
     }
 
     
-    panic!("Missing tag value. Please add an attribute like `#[tlv_tag=\"context:1\"`")
+    panic!("Missing tag value. Please add an attribute like `#[tlv_tag=\"context:1\"]`")
 }
 
 #[derive(Debug)]
@@ -436,9 +436,8 @@ impl StructFieldInfo
        //       logic for that.
        quote!{
            #tag => {
-               
                 self.#ident.merge_decode(source)?
-           } ,
+           }
        }
     }
 }
@@ -504,7 +503,7 @@ pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
                     };
 
                     let decoded = match record.tag {
-                        #(#fields)*
+                        #(#fields),*
                         _ => ::tlv_packed::DecodeEnd::DataConsumed, // TODO: log here?
                     };
 
