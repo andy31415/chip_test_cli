@@ -56,24 +56,6 @@ where
     }
 }
 
-/*
-impl<'a, Source> TlvMergeDecodable<'a, Source> for ::core::option::Option<ChildStructure>
-where
-    Source: StreamingIterator<Item = Record<'a>>
-{
-    fn merge_decode(&mut self, source: &mut Source) -> Result<DecodeEnd, DecodeError> {
-        if matches!(self, None) {
-            *self = Some(Default::default())
-        }
-
-        match self {
-            Some(ref mut value) => value.merge_decode(source)?,
-            None => return Err(DecodeError::Internal), // this should NEVER happen
-        }
-    }
-}
-*/
-
 impl<'a, Source> TlvMergeDecodable<'a, Source> for ChildStructure
 where
     Source: StreamingIterator<Item = Record<'a>>,
@@ -381,15 +363,9 @@ pub fn into_parsed_tag_value(input: TokenStream) -> TokenStream {
 
 fn extract_tag_value(attrs: impl IntoIterator<Item=Attribute>) -> proc_macro2::TokenStream {
     
-    for a in attrs.into_iter() {
-        let Path{segments,..} = a.path;
-        
-        if segments.len() != 1 {
-            continue;
-        }
-
-        if segments.first().unwrap().ident.to_string() != "tlv_tag" {
-            continue;
+    for a in attrs {
+        if !a.path.is_ident("tlv_tag") {
+            continue
         }
         
         let mut iter = a.tokens.into_iter();
@@ -470,7 +446,7 @@ pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
         _ => panic!("Derive only supported for structures"),
     };
     
-    let fields: Vec<_> = fields.into_iter().map(|item| {
+    let fields_decode: Vec<_> = fields.into_iter().map(|item| {
         StructFieldInfo::from(item).decode_match()
     }).collect();
     
@@ -503,7 +479,7 @@ pub fn derive_tlv_mergedecodable(input: TokenStream) -> TokenStream {
                     };
 
                     let decoded = match record.tag {
-                        #(#fields),*
+                        #(#fields_decode, )*
                         _ => ::tlv_packed::DecodeEnd::DataConsumed, // TODO: log here?
                     };
 
